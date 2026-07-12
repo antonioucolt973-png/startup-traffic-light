@@ -1,0 +1,113 @@
+import type { Evidence, Project } from "../types";
+
+export interface ExampleCase {
+  project: Project;
+  evidence: Evidence;
+}
+
+export const exampleCases: ExampleCase[] = [
+  {
+    project: {
+      id: "ai-try-on",
+      name: "AI 试衣助手",
+      description: "用户上传照片和衣服图，生成接近真实的试穿效果。",
+      targetUser: "经常网购买衣服但不确定上身效果的年轻女性",
+      painPoint: "模特图和买家秀都无法判断自己穿起来是否合适，退货成本高。",
+      alternative: "买家秀、小红书笔记、朋友建议、下单后退货",
+      acquisition: "小红书试穿对比内容、服装店私域社群",
+      monetization: "个人用户单次付费，或服装店工具订阅",
+      currentStage: "idea",
+      timeInvestedDays: 2,
+      moneyInvested: 0,
+      biggestUncertainty: "用户是否愿意上传照片并为效果图付费",
+    },
+    evidence: {
+      competitorResearch: true,
+      interviewCount: 3,
+      testPostCount: 1,
+      messageCount: 2,
+      signupCount: 1,
+      demoTrialCount: 0,
+      paymentSignalCount: 0,
+      retentionSignal: false,
+    },
+  },
+  {
+    project: {
+      id: "return-agent",
+      name: "电商退货归因助手",
+      description: "自动分析电商退货原因，给商家输出商品、客服和页面优化建议。",
+      targetUser: "有稳定订单量且退货率偏高的中小电商商家",
+      painPoint: "退货原因分散在客服、评价和售后记录里，人工复盘慢。",
+      alternative: "客服手工整理、ERP 报表、外包运营复盘",
+      acquisition: "电商运营社群、服务商渠道、店铺诊断内容",
+      monetization: "按月订阅或按店铺诊断报告收费",
+      currentStage: "research",
+      timeInvestedDays: 6,
+      moneyInvested: 300,
+      biggestUncertainty: "是否能拿到真实售后数据，以及商家是否愿意持续付费",
+    },
+    evidence: {
+      competitorResearch: true,
+      interviewCount: 6,
+      testPostCount: 2,
+      messageCount: 8,
+      signupCount: 3,
+      demoTrialCount: 1,
+      paymentSignalCount: 0,
+      retentionSignal: false,
+    },
+  },
+  {
+    project: {
+      id: "guard-today",
+      name: "今天也要守住小游戏",
+      description: "一款轻量休闲小游戏，玩家用低成本操作守住目标区域并分享成绩。",
+      targetUser: "喜欢短平快休闲小游戏、愿意截图分享成绩的用户",
+      painPoint: "碎片时间想玩简单但有反馈、有挑战的小游戏。",
+      alternative: "微信小游戏、抖音小游戏、朋友推荐的网页小游戏",
+      acquisition: "短视频录屏、朋友圈成绩截图、游戏社区演示帖",
+      monetization: "先不变现，验证传播和复玩",
+      currentStage: "demo",
+      timeInvestedDays: 12,
+      moneyInvested: 100,
+      biggestUncertainty: "玩家是否愿意复玩并主动分享",
+    },
+    evidence: {
+      competitorResearch: true,
+      interviewCount: 5,
+      testPostCount: 4,
+      messageCount: 11,
+      signupCount: 0,
+      demoTrialCount: 18,
+      paymentSignalCount: 0,
+      retentionSignal: true,
+    },
+  },
+  {
+    project: {
+      id: "startup-light",
+      name: "创业红绿灯",
+      description: "根据真实验证证据，判断创业项目现在该推进、验证、暂停，还是行动倒逼。",
+      targetUser: "一人公司、独立开发者、AI 创作者",
+      painPoint: "容易冲动开发或长期空想，行动和证据不匹配。",
+      alternative: "找朋友讨论、看创业方法论、自己做 Notion 表格",
+      acquisition: "黑客松演示、独立开发者社群、AI 工具内容",
+      monetization: "先验证使用频率，后续考虑模板、咨询或团队版",
+      currentStage: "mvp",
+      timeInvestedDays: 1,
+      moneyInvested: 0,
+      biggestUncertainty: "用户是否愿意认真填写证据并按灯号行动",
+    },
+    evidence: {
+      competitorResearch: true,
+      interviewCount: 2,
+      testPostCount: 1,
+      messageCount: 4,
+      signupCount: 0,
+      demoTrialCount: 0,
+      paymentSignalCount: 0,
+      retentionSignal: false,
+    },
+  },
+];
