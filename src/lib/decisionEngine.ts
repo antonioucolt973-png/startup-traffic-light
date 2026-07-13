@@ -2,8 +2,12 @@ import type {
   Assumption,
   DecisionReport,
   Evidence,
+  EvidenceRecord,
+  GateActionPlan,
+  GatePlans,
   Light,
   Project,
+  ProjectStage,
   RedTeamQuestion,
   RoadtestCheck,
   RoadtestPlan,
@@ -24,6 +28,12 @@ export const emptyProject: Project = {
   moneyInvested: 0,
   daysSinceLastExternalAction: 0,
   biggestUncertainty: "",
+  existingArtifact: "",
+  hasDemo: false,
+  hasPublished: false,
+  iterationCount: 0,
+  contactedUserCount: 0,
+  hasQuoted: false,
 };
 
 export const emptyEvidence: Evidence = {
@@ -46,6 +56,23 @@ export const emptyRoadtestPlan: RoadtestPlan = {
   delivery: "",
 };
 
+export const emptyGateActionPlan: GateActionPlan = {
+  audience: "",
+  action: "",
+  deadline: "",
+  passCriteria: "",
+  stopCriteria: "",
+};
+
+export const emptyGatePlans: GatePlans = {
+  user: { ...emptyGateActionPlan },
+  pain: { ...emptyGateActionPlan },
+  alternative: { ...emptyGateActionPlan },
+  acquisition: { ...emptyGateActionPlan },
+  payment: { ...emptyGateActionPlan },
+  delivery: { ...emptyGateActionPlan },
+};
+
 export function normalizeProject(project: Partial<Project> | null | undefined): Project {
   const source = project ?? {};
   return {
@@ -58,11 +85,17 @@ export function normalizeProject(project: Partial<Project> | null | undefined): 
     alternative: asText(source.alternative),
     acquisition: asText(source.acquisition),
     monetization: asText(source.monetization),
-    currentStage: asText(source.currentStage, emptyProject.currentStage),
+    currentStage: asProjectStage(source.currentStage),
     timeInvestedDays: asNonNegativeNumber(source.timeInvestedDays),
     moneyInvested: asNonNegativeNumber(source.moneyInvested),
     daysSinceLastExternalAction: asNonNegativeNumber(source.daysSinceLastExternalAction),
     biggestUncertainty: asText(source.biggestUncertainty),
+    existingArtifact: asText(source.existingArtifact),
+    hasDemo: Boolean(source.hasDemo) || source.currentStage === "demo" || source.currentStage === "mvp" || source.currentStage === "growth",
+    hasPublished: Boolean(source.hasPublished),
+    iterationCount: asNonNegativeNumber(source.iterationCount),
+    contactedUserCount: asNonNegativeNumber(source.contactedUserCount),
+    hasQuoted: Boolean(source.hasQuoted),
   };
 }
 
@@ -89,6 +122,45 @@ export function normalizeRoadtestPlan(plan: Partial<RoadtestPlan> | null | undef
     acquisition: asText(source.acquisition),
     payment: asText(source.payment),
     delivery: asText(source.delivery),
+  };
+}
+
+export function normalizeGatePlans(plans: Partial<GatePlans> | null | undefined): GatePlans {
+  const source = plans ?? {};
+  return {
+    user: normalizeGateActionPlan(source.user),
+    pain: normalizeGateActionPlan(source.pain),
+    alternative: normalizeGateActionPlan(source.alternative),
+    acquisition: normalizeGateActionPlan(source.acquisition),
+    payment: normalizeGateActionPlan(source.payment),
+    delivery: normalizeGateActionPlan(source.delivery),
+  };
+}
+
+export function plansToRoadtestPlan(plans: GatePlans): RoadtestPlan {
+  return {
+    user: gatePlanToText(plans.user),
+    pain: gatePlanToText(plans.pain),
+    alternative: gatePlanToText(plans.alternative),
+    acquisition: gatePlanToText(plans.acquisition),
+    payment: gatePlanToText(plans.payment),
+    delivery: gatePlanToText(plans.delivery),
+  };
+}
+
+export function deriveEvidenceSummary(records: EvidenceRecord[]): Evidence {
+  const total = (type: EvidenceRecord["type"]) =>
+    records.filter((record) => record.type === type).reduce((sum, record) => sum + Math.max(0, record.quantity), 0);
+
+  return {
+    competitorResearch: total("research") > 0,
+    interviewCount: total("interview"),
+    testPostCount: total("test_post"),
+    messageCount: total("active_interest"),
+    signupCount: total("signup"),
+    demoTrialCount: total("trial"),
+    paymentSignalCount: total("quote") + total("payment"),
+    retentionSignal: total("repeat") + total("referral") > 0,
   };
 }
 
@@ -341,6 +413,7 @@ function scorePlanText(text: string): number {
 
 function scorePlan(checks: RoadtestCheck[]): number {
   const points: Record<RoadtestStatus, number> = {
+    未检查: 0,
     已通过: 100,
     可路测: 72,
     计划太虚: 38,
@@ -709,6 +782,35 @@ function clamp(value: number, min: number, max: number) {
 
 function asText(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function asProjectStage(value: unknown): ProjectStage {
+  return value === "idea" || value === "research" || value === "demo" || value === "mvp" || value === "growth"
+    ? value
+    : emptyProject.currentStage;
+}
+
+function normalizeGateActionPlan(plan: Partial<GateActionPlan> | null | undefined): GateActionPlan {
+  const source = plan ?? {};
+  return {
+    audience: asText(source.audience),
+    action: asText(source.action),
+    deadline: asText(source.deadline),
+    passCriteria: asText(source.passCriteria),
+    stopCriteria: asText(source.stopCriteria),
+  };
+}
+
+function gatePlanToText(plan: GateActionPlan): string {
+  return [
+    plan.audience && `对象：${plan.audience}`,
+    plan.action && `行动：${plan.action}`,
+    plan.deadline && `期限：${plan.deadline}`,
+    plan.passCriteria && `通过：${plan.passCriteria}`,
+    plan.stopCriteria && `停止：${plan.stopCriteria}`,
+  ]
+    .filter(Boolean)
+    .join("；");
 }
 
 function asNonNegativeNumber(value: unknown): number {

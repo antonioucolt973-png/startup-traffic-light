@@ -1,5 +1,7 @@
 export type Light = "red" | "yellow" | "green" | "blue";
 
+export type ProjectStage = "idea" | "research" | "demo" | "mvp" | "growth";
+
 export interface Project {
   id: string;
   name: string;
@@ -9,11 +11,17 @@ export interface Project {
   alternative: string;
   acquisition: string;
   monetization: string;
-  currentStage: string;
+  currentStage: ProjectStage;
   timeInvestedDays: number;
   moneyInvested: number;
   daysSinceLastExternalAction: number;
   biggestUncertainty: string;
+  existingArtifact: string;
+  hasDemo: boolean;
+  hasPublished: boolean;
+  iterationCount: number;
+  contactedUserCount: number;
+  hasQuoted: boolean;
 }
 
 export interface Evidence {
@@ -25,6 +33,42 @@ export interface Evidence {
   demoTrialCount: number;
   paymentSignalCount: number;
   retentionSignal: boolean;
+}
+
+export type EvidenceType =
+  | "research"
+  | "interview"
+  | "problem_story"
+  | "test_post"
+  | "active_interest"
+  | "signup"
+  | "trial"
+  | "quote"
+  | "payment"
+  | "repeat"
+  | "referral";
+
+export type EvidenceSource =
+  | "ai_inference"
+  | "founder_assumption"
+  | "web_research"
+  | "founder_report"
+  | "user_feedback"
+  | "user_behavior"
+  | "payment_or_retention";
+
+export interface EvidenceRecord {
+  id: string;
+  projectId: string;
+  type: EvidenceType;
+  occurredAt: string;
+  actor: string;
+  behavior: string;
+  quantity: number;
+  source: EvidenceSource;
+  note: string;
+  url: string;
+  verifiable: boolean;
 }
 
 export interface CalibrationSnapshot {
@@ -47,7 +91,7 @@ export interface Assumption {
   risk: "低" | "中" | "高";
 }
 
-export type RoadtestStatus = "已通过" | "可路测" | "计划太虚" | "先停手" | "立即行动";
+export type RoadtestStatus = "未检查" | "已通过" | "可路测" | "计划太虚" | "先停手" | "立即行动";
 
 export type RoadtestStage = "demand" | "transaction" | "delivery";
 
@@ -60,8 +104,20 @@ export interface RoadtestPlan {
   delivery: string;
 }
 
+export type GateId = keyof RoadtestPlan;
+
+export interface GateActionPlan {
+  audience: string;
+  action: string;
+  deadline: string;
+  passCriteria: string;
+  stopCriteria: string;
+}
+
+export type GatePlans = Record<GateId, GateActionPlan>;
+
 export interface RoadtestCheck {
-  id: keyof RoadtestPlan;
+  id: GateId;
   stage: RoadtestStage;
   title: string;
   scene: string;
@@ -76,6 +132,63 @@ export interface RedTeamQuestion {
   role: string;
   question: string;
   severity: "低风险" | "中风险" | "高风险";
+}
+
+export interface RedTeamTurn {
+  id: string;
+  projectId: string;
+  gateId: GateId;
+  round: 1 | 2;
+  question: string;
+  answer: string;
+  feedback: string;
+  source: "ai" | "fallback";
+  createdAt: string;
+}
+
+export interface ValidationTask {
+  id: string;
+  projectId: string;
+  day: number;
+  title: string;
+  detail: string;
+  passCriteria: string;
+  stopCriteria: string;
+  status: "pending" | "completed" | "failed";
+  result: string;
+  evidenceIds: string[];
+}
+
+export interface CalibrationRound {
+  id: string;
+  projectId: string;
+  projectName: string;
+  createdAt: string;
+  stage: ProjectStage;
+  light: Light;
+  lightLabel: string;
+  evidenceScore: number;
+  evidenceLevel: number;
+  projectStructureScore: number;
+  planScore: number;
+  currentFocus: string;
+  nextReviewTrigger: string;
+  gateStatuses: Record<GateId, RoadtestStatus>;
+  investmentLimit: {
+    days: number;
+    money: number;
+  };
+  evidenceRecordIds: string[];
+}
+
+export interface ProjectWorkspace {
+  schemaVersion: 2;
+  project: Project;
+  evidenceRecords: EvidenceRecord[];
+  plans: GatePlans;
+  redTeamTurns: RedTeamTurn[];
+  tasks: ValidationTask[];
+  rounds: CalibrationRound[];
 }
 
 export interface DecisionReport {

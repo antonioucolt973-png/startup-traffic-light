@@ -1,253 +1,250 @@
 import { useMemo, useState } from "react";
-import { ClipboardList, FileText, Home, Radar } from "lucide-react";
+import { Backpack, ClipboardCheck, Flag, Map, Route, Sparkles } from "lucide-react";
 import { DecisionReportView } from "./components/DecisionReport";
-import { HomeScreen } from "./components/HomeScreen";
-import { ProjectInput } from "./components/ProjectInput";
+import { JourneyMapScreen } from "./components/JourneyMapScreen";
+import { ProjectCar } from "./components/ProjectCar";
+import { ProjectDeparture } from "./components/ProjectDeparture";
 import { RealityIntersections } from "./components/RealityIntersections";
-import { StepRail } from "./components/StepRail";
 import { TrafficLight } from "./components/TrafficLight";
 import { exampleCases } from "./data/examples";
 import {
   buildReport,
-  emptyEvidence,
-  emptyProject,
-  emptyRoadtestPlan,
-  getMissingMinimumProjectFields,
-  normalizeEvidence,
+  deriveEvidenceSummary,
+  emptyGatePlans,
+  normalizeGatePlans,
   normalizeProject,
-  normalizeRoadtestPlan,
+  plansToRoadtestPlan,
 } from "./lib/decisionEngine";
-import { getStageLabel } from "./lib/labels";
 import {
-  loadEvidence,
-  loadCalibrationHistory,
-  loadProject,
-  loadRoadtestPlan,
-  saveCalibrationHistory,
-  saveEvidence,
-  saveProject,
-  saveRoadtestPlan,
+  createEmptyWorkspace,
+  evidenceSummaryToRecords,
+  loadWorkspace,
+  saveWorkspace,
 } from "./lib/storage";
-import type { CalibrationSnapshot, Evidence, Project, RoadtestPlan } from "./types";
+import type {
+  CalibrationRound,
+  CalibrationSnapshot,
+  Evidence,
+  GateId,
+  Project,
+  ProjectWorkspace,
+  RoadtestPlan,
+} from "./types";
 
-type StepId = "home" | "input" | "intersections" | "report";
+type ViewId = "departure" | "map" | "gate" | "report";
 
-const steps: Array<{ id: StepId; label: string; icon: React.ComponentType<{ size?: number }> }> = [
-  { id: "home", label: "首页", icon: Home },
-  { id: "input", label: "项目上路", icon: ClipboardList },
-  { id: "intersections", label: "现实路口", icon: Radar },
-  { id: "report", label: "节奏校准单", icon: FileText },
+const views: Array<{ id: ViewId; label: string; icon: React.ComponentType<{ size?: number }> }> = [
+  { id: "departure", label: "项目出发", icon: Flag },
+  { id: "map", label: "路线总览", icon: Map },
+  { id: "gate", label: "现实路口", icon: Route },
+  { id: "report", label: "下一程路线", icon: ClipboardCheck },
 ];
 
 export default function App() {
-  const [project, setProjectState] = useState<Project>(() => normalizeProject(loadProject() ?? emptyProject));
-  const [evidence, setEvidenceState] = useState<Evidence>(() => normalizeEvidence(loadEvidence() ?? emptyEvidence));
-  const [roadtestPlan, setRoadtestPlanState] = useState<RoadtestPlan>(() =>
-    normalizeRoadtestPlan(loadRoadtestPlan()),
-  );
-  const [activeStep, setActiveStep] = useState<StepId>("home");
-  const [activeGate, setActiveGate] = useState<keyof RoadtestPlan>("user");
-  const [showInputValidation, setShowInputValidation] = useState(false);
+  const [workspace, setWorkspaceState] = useState<ProjectWorkspace>(() => loadWorkspace());
+  const [activeView, setActiveView] = useState<ViewId>("departure");
+  const [activeGate, setActiveGate] = useState<GateId>("user");
   const [copyState, setCopyState] = useState("复制报告");
   const [saveState, setSaveState] = useState("保存本轮");
-  const [calibrationHistory, setCalibrationHistory] = useState<CalibrationSnapshot[]>(() => loadCalibrationHistory());
 
-  const report = useMemo(() => buildReport(project, evidence, roadtestPlan), [project, evidence, roadtestPlan]);
-  const missingInputFields = useMemo(() => getMissingMinimumProjectFields(project), [project]);
-  const projectHistory = useMemo(
-    () => calibrationHistory.filter((snapshot) => snapshot.projectId === project.id),
-    [calibrationHistory, project.id],
+  const evidence = useMemo(() => deriveEvidenceSummary(workspace.evidenceRecords), [workspace.evidenceRecords]);
+  const roadtestPlan = useMemo(() => plansToRoadtestPlan(workspace.plans), [workspace.plans]);
+  const report = useMemo(
+    () => buildReport(workspace.project, evidence, roadtestPlan),
+    [workspace.project, evidence, roadtestPlan],
   );
-  const currentIndex = steps.findIndex((step) => step.id === activeStep);
+  const history = useMemo(
+    () => workspace.rounds.map(roundToSnapshot),
+    [workspace.rounds],
+  );
 
-  function setProject(next: Project) {
-    setProjectState(next);
-    saveProject(next);
-    if (getMissingMinimumProjectFields(next).length === 0) setShowInputValidation(false);
+  function navigate(view: ViewId) {
+    setActiveView(view);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  function setWorkspace(next: ProjectWorkspace) {
+    setWorkspaceState(next);
+    saveWorkspace(next);
+  }
+
+  function setProject(project: Project) {
+    setWorkspace({ ...workspace, project: normalizeProject(project) });
   }
 
   function setEvidence(next: Evidence) {
-    setEvidenceState(next);
-    saveEvidence(next);
+    setWorkspace({
+      ...workspace,
+      evidenceRecords: evidenceSummaryToRecords(workspace.project.id, next),
+    });
   }
 
-  function setRoadtestPlan(next: RoadtestPlan) {
-    setRoadtestPlanState(next);
-    saveRoadtestPlan(next);
+  function setLegacyPlan(next: RoadtestPlan) {
+    const plans = normalizeGatePlans(workspace.plans);
+    setWorkspace({
+      ...workspace,
+      plans: {
+        user: { ...plans.user, action: next.user },
+        pain: { ...plans.pain, action: next.pain },
+        alternative: { ...plans.alternative, action: next.alternative },
+        acquisition: { ...plans.acquisition, action: next.acquisition },
+        payment: { ...plans.payment, action: next.payment },
+        delivery: { ...plans.delivery, action: next.delivery },
+      },
+    });
   }
 
   function loadExample(index: number) {
     const example = exampleCases[index];
-    setProject(example.project);
-    setEvidence(example.evidence);
-    setRoadtestPlan(emptyRoadtestPlan);
+    const next = createEmptyWorkspace(example.project);
+    next.evidenceRecords = evidenceSummaryToRecords(example.project.id, example.evidence);
+    next.plans = normalizeGatePlans(emptyGatePlans);
+    setWorkspace(next);
     setActiveGate("user");
-    setShowInputValidation(false);
-    setActiveStep("intersections");
+    navigate("map");
   }
 
-  function goNext() {
-    if (activeStep === "input" && missingInputFields.length > 0) {
-      setShowInputValidation(true);
-      return;
-    }
-    const next = steps[Math.min(currentIndex + 1, steps.length - 1)];
-    setActiveStep(next.id);
+  function enterGate(gate: GateId = activeGate) {
+    setActiveGate(gate);
+    navigate("gate");
   }
 
   async function copyReport() {
     try {
       await navigator.clipboard.writeText(report.markdown);
       setCopyState("已复制");
-      window.setTimeout(() => setCopyState("复制报告"), 1600);
     } catch {
       setCopyState("复制失败");
-      window.setTimeout(() => setCopyState("复制报告"), 1600);
     }
+    window.setTimeout(() => setCopyState("复制报告"), 1600);
   }
 
   function saveCurrentCalibration() {
-    const snapshot: CalibrationSnapshot = {
+    const round: CalibrationRound = {
       id: `${Date.now()}-${report.light}`,
-      projectId: project.id,
-      projectName: project.name || "未命名项目",
+      projectId: workspace.project.id,
+      projectName: workspace.project.name || "未命名项目",
       createdAt: new Date().toISOString(),
-      stage: project.currentStage,
+      stage: workspace.project.currentStage,
       light: report.light,
       lightLabel: report.lightLabel,
       evidenceScore: report.evidenceScore,
       evidenceLevel: report.evidenceLevel,
       projectStructureScore: report.projectStructureScore,
+      planScore: report.planScore,
       currentFocus: report.currentFocus,
+      nextReviewTrigger: report.nextReviewTrigger,
+      gateStatuses: Object.fromEntries(report.roadtestChecks.map((item) => [item.id, item.status])) as CalibrationRound["gateStatuses"],
+      investmentLimit: { days: report.investmentLimit.days, money: report.investmentLimit.money },
+      evidenceRecordIds: workspace.evidenceRecords.map((record) => record.id),
     };
-    const next = [snapshot, ...calibrationHistory].slice(0, 12);
-    setCalibrationHistory(next);
-    saveCalibrationHistory(next);
+    setWorkspace({ ...workspace, rounds: [round, ...workspace.rounds].slice(0, 12) });
     setSaveState("已保存");
     window.setTimeout(() => setSaveState("保存本轮"), 1600);
   }
 
   return (
-    <main className="appShell">
-      <aside className="sidePanel">
-        <div className="brandBlock">
-          <div className="brandMark">
-            <span />
-            <span />
-            <span />
-          </div>
-          <div>
-            <h1>创业红绿灯</h1>
-            <p>用证据校准创业节奏</p>
-          </div>
-        </div>
+    <main className="journeyApp">
+      <header className="journeyHeader">
+        <button className="journeyBrand" type="button" onClick={() => navigate("departure")}>
+          <span className="brandSignal" aria-hidden="true"><i /><i /><i /></span>
+          <span><strong>创业红绿灯</strong><small>用证据校准创业节奏</small></span>
+        </button>
+        <nav className="journeyNav" aria-label="创业校准流程">
+          {views.map((view, index) => {
+            const Icon = view.icon;
+            return (
+              <button key={view.id} className={activeView === view.id ? "active" : ""} type="button" onClick={() => navigate(view.id)}>
+                <span>{String(index + 1).padStart(2, "0")}</span><Icon size={16} />{view.label}
+              </button>
+            );
+          })}
+        </nav>
+        <button className="headerProject" type="button" onClick={() => navigate("departure")}>
+          <Sparkles size={15} /><span>{workspace.project.name || "未命名项目"}</span>
+        </button>
+      </header>
 
-        <StepRail steps={steps} activeStep={activeStep} onStepChange={setActiveStep} />
+      <div className={`journeyWorkspace view-${activeView}`}>
+        <section className="journeyMain">
+          {activeView === "departure" && (
+            <ProjectDeparture
+              project={workspace.project}
+              onChange={setProject}
+              examples={exampleCases}
+              onLoadExample={loadExample}
+              onReady={() => navigate("map")}
+            />
+          )}
+          {activeView === "map" && (
+            <JourneyMapScreen
+              project={workspace.project}
+              report={report}
+              activeGate={activeGate}
+              onGateChange={setActiveGate}
+              onEnterGate={() => enterGate()}
+            />
+          )}
+          {activeView === "gate" && (
+            <RealityIntersections
+              report={report}
+              evidence={evidence}
+              onEvidenceChange={setEvidence}
+              plan={roadtestPlan}
+              onPlanChange={setLegacyPlan}
+              activeGate={activeGate}
+              onActiveGateChange={setActiveGate}
+            />
+          )}
+          {activeView === "report" && (
+            <DecisionReportView
+              report={report}
+              project={workspace.project}
+              onCopy={copyReport}
+              copyState={copyState}
+              onSaveCalibration={saveCurrentCalibration}
+              saveState={saveState}
+              history={history}
+            />
+          )}
+        </section>
 
-        <div className="exampleBox">
-          <div className="sectionTitle">演示案例</div>
-          {exampleCases.map((item, index) => (
-            <button key={item.project.id} className="exampleButton" onClick={() => loadExample(index)}>
-              <span>{item.project.name}</span>
-              <small>{getStageLabel(item.project.currentStage)}</small>
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <section className="workbench">
-        <header className="topBar">
-          <div>
-            <p className="microLabel">最小闭环版</p>
-            <h2>{steps[currentIndex].label}</h2>
-          </div>
-          <div className="topActions">
-            <button className="ghostButton" onClick={() => setActiveStep("report")}>
-              查看校准
-            </button>
-            <button className="primaryButton" onClick={goNext}>
-              下一步
-            </button>
-          </div>
-        </header>
-
-        <div className="contentGrid">
-          <section className="mainStage">
-            {activeStep === "home" && (
-              <HomeScreen onStart={() => setActiveStep("input")} calibrationCount={calibrationHistory.length} />
-            )}
-            {activeStep === "input" && (
-              <ProjectInput
-                project={project}
-                onChange={setProject}
-                assumptions={report.assumptions}
-                missingFields={showInputValidation ? missingInputFields : []}
-              />
-            )}
-            {activeStep === "intersections" && (
-              <RealityIntersections
-                report={report}
-                evidence={evidence}
-                onEvidenceChange={setEvidence}
-                plan={roadtestPlan}
-                onPlanChange={setRoadtestPlan}
-                activeGate={activeGate}
-                onActiveGateChange={setActiveGate}
-              />
-            )}
-            {activeStep === "report" && (
-              <DecisionReportView
-                report={report}
-                project={project}
-                onCopy={copyReport}
-                copyState={copyState}
-                onSaveCalibration={saveCurrentCalibration}
-                saveState={saveState}
-                history={projectHistory}
-              />
-            )}
-          </section>
-
-          <aside className={`decisionRail ${activeStep === "report" ? "compactRail" : ""}`}>
+        {activeView !== "departure" && (
+          <aside className="journeySidebar">
             <TrafficLight light={report.light} label={report.lightLabel} reason={report.lightReason} />
-            <div className="scorePanel">
-              <div>
-                <span className="scoreValue">{report.evidenceScore}</span>
-                <span className="scoreUnit">/100</span>
-              </div>
-              <p>证据充分度</p>
-              <div className="meterTrack">
-                <span style={{ width: `${report.evidenceScore}%` }} />
-              </div>
-            </div>
-            <div className="limitPanel">
-              <div className="sectionTitle">路测可信度</div>
-              <div className="planScoreLine">
-                <strong>{report.planCredibility}</strong>
-                <span>{report.planScore}/100</span>
-              </div>
-            </div>
-            <div className="limitPanel">
-              <div className="sectionTitle">投入上限</div>
-              <div className="limitGrid">
-                <div>
-                  <strong>{report.investmentLimit.days}</strong>
-                  <span>天</span>
-                </div>
-                <div>
-                  <strong>{report.investmentLimit.money}</strong>
-                  <span>元</span>
-                </div>
-              </div>
-              <ul>
-                {report.investmentLimit.bans.map((ban) => (
-                  <li key={ban}>{ban}</li>
-                ))}
-              </ul>
-            </div>
+            <ProjectCar project={workspace.project} compact />
+            <section className="pulsePanel">
+              <div><span>证据充分度</span><strong>{report.evidenceScore}<small>/100</small></strong></div>
+              <div className="pulseMeter"><span style={{ width: `${report.evidenceScore}%` }} /></div>
+            </section>
+            <section className="pulsePanel split">
+              <div><span>路测可信度</span><strong>{report.planCredibility}</strong><small>{report.planScore}/100</small></div>
+              <Backpack size={24} />
+            </section>
+            <section className="pulsePanel">
+              <span>投入上限</span>
+              <div className="investmentPair"><strong>{report.investmentLimit.days}<small>天</small></strong><strong>{report.investmentLimit.money}<small>元</small></strong></div>
+              <ul>{report.investmentLimit.bans.slice(0, 3).map((ban) => <li key={ban}>{ban}</li>)}</ul>
+            </section>
           </aside>
-        </div>
-      </section>
+        )}
+      </div>
     </main>
   );
+}
+
+function roundToSnapshot(round: CalibrationRound): CalibrationSnapshot {
+  return {
+    id: round.id,
+    projectId: round.projectId,
+    projectName: round.projectName,
+    createdAt: round.createdAt,
+    stage: round.stage,
+    light: round.light,
+    lightLabel: round.lightLabel,
+    evidenceScore: round.evidenceScore,
+    evidenceLevel: round.evidenceLevel,
+    projectStructureScore: round.projectStructureScore,
+    currentFocus: round.currentFocus,
+  };
 }
