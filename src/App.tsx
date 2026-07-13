@@ -35,7 +35,7 @@ type ViewId = "departure" | "map" | "gate" | "backpack" | "route" | "refill";
 const views: Array<{ id: ViewId; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { id: "departure", label: "项目出发", icon: Flag },
   { id: "map", label: "路线总览", icon: Map },
-  { id: "gate", label: "现实路口", icon: Route },
+  { id: "gate", label: "路口与红队", icon: Route },
   { id: "backpack", label: "证据背包", icon: Backpack },
   { id: "route", label: "下一程路线", icon: ClipboardCheck },
   { id: "refill", label: "证据回填", icon: RotateCcw },
@@ -226,10 +226,12 @@ export default function App() {
               records={workspace.evidenceRecords}
               tasks={workspace.tasks}
               rounds={workspace.rounds}
+              redTeamTurns={workspace.redTeamTurns}
               onCopy={copyReport}
               copyState={copyState}
               onResetTasks={resetTasks}
               onOpenRefill={() => navigate("refill")}
+              onOpenRedTeam={() => navigate("gate")}
             />
           )}
           {activeView === "refill" && (

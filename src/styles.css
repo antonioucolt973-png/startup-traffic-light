@@ -486,6 +486,14 @@ h1, h2, h3, h4, p { margin-top: 0; }
 .routeFocusBand span { color: #68716e; font-size: 10px; font-weight: 800; }
 .routeFocusBand strong { display: block; margin-top: 4px; font-size: 18px; line-height: 1.45; }
 .routeFocusBand p { margin: 4px 0 0; color: #5d6663; font-size: 11px; }
+.redTeamCheckpoint { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 15px; padding: 17px 19px; border: 1px solid rgba(240, 82, 82, 0.42); border-radius: 8px; background: rgba(240, 82, 82, 0.07); }
+.redTeamCheckpoint.started { border-color: rgba(240, 200, 46, 0.34); background: rgba(240, 200, 46, 0.05); }
+.redTeamCheckpointIcon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 7px; background: #211617; color: #ff8f8f; }
+.redTeamCheckpoint.started .redTeamCheckpointIcon { background: #201e13; color: var(--yellow); }
+.redTeamCheckpoint span { color: #ff9999; font-size: 10px; font-weight: 800; }
+.redTeamCheckpoint.started span { color: var(--yellow); }
+.redTeamCheckpoint strong { display: block; margin-top: 4px; font-size: 17px; }
+.redTeamCheckpoint p { margin: 5px 0 0; color: #aeb8b6; font-size: 11px; line-height: 1.5; }
 .routeDecisionGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .routeDecisionCard { min-height: 170px; padding: 17px; border: 1px solid var(--line); border-radius: 8px; background: #111617; }
 .routeDecisionCard > span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
@@ -695,6 +703,8 @@ h1, h2, h3, h4, p { margin-top: 0; }
   .routePassHeader, .refillHeader { align-items: flex-start; }
   .routeFocusBand { grid-template-columns: auto minmax(0, 1fr); }
   .routeFocusBand .primaryButton { grid-column: 1 / -1; width: 100%; }
+  .redTeamCheckpoint { grid-template-columns: auto minmax(0, 1fr); }
+  .redTeamCheckpoint button { grid-column: 1 / -1; width: 100%; }
 }
 
 @media (max-width: 620px) {
@@ -745,6 +755,9 @@ h1, h2, h3, h4, p { margin-top: 0; }
   .routeFocusBand { grid-template-columns: 1fr; }
   .routeFocusBand > svg { display: none; }
   .routeFocusBand .primaryButton { grid-column: auto; }
+  .redTeamCheckpoint { grid-template-columns: 1fr; }
+  .redTeamCheckpointIcon { display: none; }
+  .redTeamCheckpoint button { grid-column: auto; }
   .routeDecisionGrid, .routeBottomGrid, .calibrationHistoryBoard ol { grid-template-columns: 1fr; }
   .routeBottomGrid > :last-child { grid-column: auto; }
   .taskBoardActions { align-items: stretch; flex-direction: column; }

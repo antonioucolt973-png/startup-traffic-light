@@ -7,6 +7,7 @@ import {
   Flag,
   RefreshCw,
   Route,
+  ShieldAlert,
   ShieldX,
   TimerReset,
 } from "lucide-react";
@@ -14,7 +15,7 @@ import { useMemo, useState } from "react";
 import { requestAiCoach } from "../lib/aiClient";
 import { evidenceTypeLabels, gateLabels, taskStatusLabels } from "../lib/labels";
 import type { AiCoachResponse } from "../lib/aiSchemas";
-import type { CalibrationRound, DecisionReport, Evidence, EvidenceRecord, Project, ValidationTask } from "../types";
+import type { CalibrationRound, DecisionReport, Evidence, EvidenceRecord, Project, RedTeamTurn, ValidationTask } from "../types";
 
 interface NextRouteProps {
   report: DecisionReport;
@@ -23,10 +24,12 @@ interface NextRouteProps {
   records: EvidenceRecord[];
   tasks: ValidationTask[];
   rounds: CalibrationRound[];
+  redTeamTurns: RedTeamTurn[];
   onCopy: () => void;
   copyState: string;
   onResetTasks: () => void;
   onOpenRefill: () => void;
+  onOpenRedTeam: () => void;
 }
 
 const evidenceStrength: Record<EvidenceRecord["type"], number> = {
@@ -50,10 +53,12 @@ export function NextRoute({
   records,
   tasks,
   rounds,
+  redTeamTurns,
   onCopy,
   copyState,
   onResetTasks,
   onOpenRefill,
+  onOpenRedTeam,
 }: NextRouteProps) {
   const [coach, setCoach] = useState<AiCoachResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -61,6 +66,7 @@ export function NextRoute({
     .filter((record) => record.source !== "ai_inference" && record.source !== "founder_assumption")
     .sort((a, b) => evidenceStrength[b.type] - evidenceStrength[a.type] || b.quantity - a.quantity)[0], [records]);
   const completedTasks = tasks.filter((task) => task.status !== "pending").length;
+  const checkedGateCount = new Set(redTeamTurns.filter((turn) => turn.round === 2).map((turn) => turn.gateId)).size;
 
   async function personalizeTasks() {
     setLoading(true);
@@ -109,6 +115,16 @@ export function NextRoute({
         <Flag size={24} />
         <div><span>本轮唯一重点</span><strong>{report.currentFocus}</strong><p>{report.nextReviewTrigger}</p></div>
         <button className="primaryButton" type="button" onClick={onOpenRefill}><ClipboardCheck size={16} />开始执行与回填</button>
+      </section>
+
+      <section className={`redTeamCheckpoint ${checkedGateCount > 0 ? "started" : "pending"}`}>
+        <div className="redTeamCheckpointIcon"><ShieldAlert size={24} /></div>
+        <div>
+          <span>红队检查进度</span>
+          <strong>{checkedGateCount}/6 个路口完成两轮追问</strong>
+          <p>{checkedGateCount > 0 ? "红队回答会帮助你暴露方案漏洞，但不会直接提高证据等级。" : "你还没有回答红队。当前路线可以查看，但关键假设尚未经过反驳。"}</p>
+        </div>
+        <button className={checkedGateCount > 0 ? "ghostButton" : "primaryButton"} type="button" onClick={onOpenRedTeam}><ShieldAlert size={16} />{checkedGateCount > 0 ? "继续红队检查" : "现在接受红队检查"}</button>
       </section>
 
       <div className="routeDecisionGrid">
