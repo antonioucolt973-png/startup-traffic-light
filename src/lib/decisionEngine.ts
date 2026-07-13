@@ -700,7 +700,7 @@ function getLightLabel(light: Light): string {
 }
 
 function getLightReason(light: Light, project: Project, evidenceScore: number, evidenceLevel: number): string {
-  if (light === "green") return "已有较强外部反馈，可以做受控 MVP 或继续迭代。";
+  if (light === "green") return "已有较强外部反馈，可以做受控最小版本或继续迭代。";
   if (light === "red") return "投入已明显跑在证据前面，继续加码会放大风险，先冻结开发并补真实反馈。";
   if (light === "blue") {
     const hasDemo = hasShowableArtifact(project);

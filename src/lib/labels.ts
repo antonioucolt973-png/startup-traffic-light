@@ -37,3 +37,18 @@ export const evidenceSourceLabels = {
   user_behavior: "用户实际行为",
   payment_or_retention: "付款或复用行为",
 } as const;
+
+export const gateLabels = {
+  user: "目标用户站",
+  pain: "痛点路口",
+  alternative: "替代方案站",
+  acquisition: "获客入口站",
+  payment: "付费阻力站",
+  delivery: "交付压力站",
+} as const;
+
+export const taskStatusLabels = {
+  pending: "待执行",
+  completed: "已完成",
+  failed: "未通过",
+} as const;

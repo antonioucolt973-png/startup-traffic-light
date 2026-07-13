@@ -16,6 +16,7 @@ import type {
   Project,
   ProjectWorkspace,
   RedTeamTurn,
+  RoadtestStatus,
   RoadtestPlan,
   ValidationTask,
 } from "../types";
@@ -117,8 +118,12 @@ function normalizeWorkspace(workspace: Partial<ProjectWorkspace>): ProjectWorksp
     redTeamTurns: Array.isArray(workspace.redTeamTurns)
       ? workspace.redTeamTurns.filter(isRedTeamTurn).slice(-24)
       : [],
-    tasks: Array.isArray(workspace.tasks) ? workspace.tasks.filter(isValidationTask).slice(0, 7) : [],
-    rounds: Array.isArray(workspace.rounds) ? workspace.rounds.filter(isCalibrationRound).slice(0, 12) : [],
+    tasks: Array.isArray(workspace.tasks)
+      ? workspace.tasks.filter(isValidationTask).map((task) => normalizeValidationTask(task, project.id)).slice(0, 7)
+      : [],
+    rounds: Array.isArray(workspace.rounds)
+      ? workspace.rounds.filter(isCalibrationRound).map((round) => normalizeCalibrationRound(round, project)).slice(0, 12)
+      : [],
   };
 }
 
@@ -176,8 +181,11 @@ function snapshotToRound(snapshot: CalibrationSnapshot): CalibrationRound {
     evidenceLevel: snapshot.evidenceLevel,
     projectStructureScore: snapshot.projectStructureScore,
     planScore: 0,
+    lightReason: "由旧版校准记录迁移，未保存当时的详细判定依据。",
+    changeSummary: "旧版历史记录",
     currentFocus: snapshot.currentFocus,
     nextReviewTrigger: "完成新的外部行动后重新校准。",
+    reviewAt: snapshot.createdAt,
     gateStatuses: {
       user: "未检查",
       pain: "未检查",
@@ -254,6 +262,58 @@ function isCalibrationRound(value: unknown): value is CalibrationRound {
     typeof round.createdAt === "string" &&
     typeof round.light === "string" &&
     typeof round.evidenceScore === "number";
+}
+
+function normalizeValidationTask(task: ValidationTask, projectId: string): ValidationTask {
+  return {
+    id: task.id,
+    projectId,
+    day: Math.min(7, Math.max(1, task.day)),
+    title: typeof task.title === "string" ? task.title : `第 ${task.day} 天 · 现实验证`,
+    detail: typeof task.detail === "string" ? task.detail : "",
+    passCriteria: typeof task.passCriteria === "string" ? task.passCriteria : "产生一条真实外部行为记录。",
+    stopCriteria: typeof task.stopCriteria === "string" ? task.stopCriteria : "没有外部反馈时不追加投入。",
+    status: task.status === "completed" || task.status === "failed" ? task.status : "pending",
+    result: typeof task.result === "string" ? task.result : "",
+    evidenceIds: Array.isArray(task.evidenceIds) ? task.evidenceIds.filter((id): id is string => typeof id === "string") : [],
+  };
+}
+
+function normalizeCalibrationRound(round: CalibrationRound, project: Project): CalibrationRound {
+  const gateStatuses = round.gateStatuses ?? {} as CalibrationRound["gateStatuses"];
+  return {
+    ...round,
+    projectId: project.id,
+    projectName: typeof round.projectName === "string" ? round.projectName : project.name,
+    stage: normalizeLegacyStage(round.stage),
+    planScore: typeof round.planScore === "number" ? round.planScore : 0,
+    lightReason: typeof round.lightReason === "string" ? round.lightReason : "历史记录未保存详细判定依据。",
+    changeSummary: typeof round.changeSummary === "string" ? round.changeSummary : "历史记录",
+    currentFocus: typeof round.currentFocus === "string" ? round.currentFocus : "继续补充现实证据。",
+    nextReviewTrigger: typeof round.nextReviewTrigger === "string" ? round.nextReviewTrigger : "完成新的外部行动后重新校准。",
+    reviewAt: typeof round.reviewAt === "string" ? round.reviewAt : round.createdAt,
+    gateStatuses: {
+      user: normalizeRoadtestStatus(gateStatuses.user),
+      pain: normalizeRoadtestStatus(gateStatuses.pain),
+      alternative: normalizeRoadtestStatus(gateStatuses.alternative),
+      acquisition: normalizeRoadtestStatus(gateStatuses.acquisition),
+      payment: normalizeRoadtestStatus(gateStatuses.payment),
+      delivery: normalizeRoadtestStatus(gateStatuses.delivery),
+    },
+    investmentLimit: {
+      days: typeof round.investmentLimit?.days === "number" ? round.investmentLimit.days : 0,
+      money: typeof round.investmentLimit?.money === "number" ? round.investmentLimit.money : 0,
+    },
+    evidenceRecordIds: Array.isArray(round.evidenceRecordIds)
+      ? round.evidenceRecordIds.filter((id): id is string => typeof id === "string")
+      : [],
+  };
+}
+
+function normalizeRoadtestStatus(status: unknown): RoadtestStatus {
+  return status === "已通过" || status === "可路测" || status === "计划太虚" || status === "先停手" || status === "立即行动"
+    ? status
+    : "未检查";
 }
 
 function normalizeLegacyStage(stage: string): Project["currentStage"] {

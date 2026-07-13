@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Backpack, ClipboardCheck, Flag, Map, Route, Sparkles } from "lucide-react";
-import { DecisionReportView } from "./components/DecisionReport";
+import { Backpack, ClipboardCheck, Flag, Map, RotateCcw, Route, Sparkles } from "lucide-react";
 import { EvidenceBackpack } from "./components/EvidenceBackpack";
+import { EvidenceRefill } from "./components/EvidenceRefill";
 import { GateChallenge } from "./components/GateChallenge";
 import { JourneyMapScreen } from "./components/JourneyMapScreen";
+import { NextRoute } from "./components/NextRoute";
 import { ProjectCar } from "./components/ProjectCar";
 import { ProjectDeparture } from "./components/ProjectDeparture";
 import { TrafficLight } from "./components/TrafficLight";
@@ -16,6 +17,7 @@ import {
   normalizeProject,
   plansToRoadtestPlan,
 } from "./lib/decisionEngine";
+import { createCalibrationRound, createValidationTasks } from "./lib/calibration";
 import {
   createEmptyWorkspace,
   evidenceSummaryToRecords,
@@ -23,21 +25,20 @@ import {
   saveWorkspace,
 } from "./lib/storage";
 import type {
-  CalibrationRound,
-  CalibrationSnapshot,
   GateId,
   Project,
   ProjectWorkspace,
 } from "./types";
 
-type ViewId = "departure" | "map" | "gate" | "backpack" | "report";
+type ViewId = "departure" | "map" | "gate" | "backpack" | "route" | "refill";
 
 const views: Array<{ id: ViewId; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { id: "departure", label: "项目出发", icon: Flag },
   { id: "map", label: "路线总览", icon: Map },
   { id: "gate", label: "现实路口", icon: Route },
   { id: "backpack", label: "证据背包", icon: Backpack },
-  { id: "report", label: "下一程路线", icon: ClipboardCheck },
+  { id: "route", label: "下一程路线", icon: ClipboardCheck },
+  { id: "refill", label: "证据回填", icon: RotateCcw },
 ];
 
 export default function App() {
@@ -45,7 +46,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<ViewId>("departure");
   const [activeGate, setActiveGate] = useState<GateId>("user");
   const [copyState, setCopyState] = useState("复制报告");
-  const [saveState, setSaveState] = useState("保存本轮");
+  const [saveState, setSaveState] = useState("重新校准");
 
   const evidence = useMemo(() => deriveEvidenceSummary(workspace.evidenceRecords), [workspace.evidenceRecords]);
   const roadtestPlan = useMemo(() => plansToRoadtestPlan(workspace.plans), [workspace.plans]);
@@ -53,23 +54,35 @@ export default function App() {
     () => buildReport(workspace.project, evidence, roadtestPlan),
     [workspace.project, evidence, roadtestPlan],
   );
-  const history = useMemo(
-    () => workspace.rounds.map(roundToSnapshot),
-    [workspace.rounds],
-  );
-
   function navigate(view: ViewId) {
+    if (view === "route" || view === "refill") {
+      updateWorkspace((current) => ensureExecutionState(current));
+    }
     setActiveView(view);
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }
 
-  function setWorkspace(next: ProjectWorkspace) {
-    setWorkspaceState(next);
-    saveWorkspace(next);
+  function replaceWorkspace(next: ProjectWorkspace) {
+    const normalized = ensureWorkspaceVersion(next);
+    setWorkspaceState(normalized);
+    saveWorkspace(normalized);
+  }
+
+  function updateWorkspace(updater: (current: ProjectWorkspace) => ProjectWorkspace) {
+    setWorkspaceState((current) => {
+      const next = ensureWorkspaceVersion(updater(current));
+      saveWorkspace(next);
+      return next;
+    });
   }
 
   function setProject(project: Project) {
-    setWorkspace({ ...workspace, project: normalizeProject(project) });
+    const normalized = normalizeProject(project);
+    updateWorkspace((current) => ({
+      ...current,
+      project: normalized,
+      tasks: projectInputsChanged(current.project, normalized) ? [] : current.tasks,
+    }));
   }
 
   function loadExample(index: number) {
@@ -77,7 +90,7 @@ export default function App() {
     const next = createEmptyWorkspace(example.project);
     next.evidenceRecords = evidenceSummaryToRecords(example.project.id, example.evidence);
     next.plans = normalizeGatePlans(emptyGatePlans);
-    setWorkspace(next);
+    replaceWorkspace(next);
     setActiveGate("user");
     navigate("map");
   }
@@ -88,24 +101,42 @@ export default function App() {
   }
 
   function updateActivePlan(plan: ProjectWorkspace["plans"][GateId]) {
-    setWorkspace({ ...workspace, plans: { ...workspace.plans, [activeGate]: plan } });
+    updateWorkspace((current) => ({ ...current, plans: { ...current.plans, [activeGate]: plan } }));
   }
 
   function addEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
-    setWorkspace({ ...workspace, evidenceRecords: [record, ...workspace.evidenceRecords] });
+    updateWorkspace((current) => ({ ...current, evidenceRecords: [record, ...current.evidenceRecords] }));
   }
 
   function removeEvidenceRecord(recordId: string) {
-    setWorkspace({ ...workspace, evidenceRecords: workspace.evidenceRecords.filter((record) => record.id !== recordId) });
+    updateWorkspace((current) => ({
+      ...current,
+      evidenceRecords: current.evidenceRecords.filter((record) => record.id !== recordId),
+      tasks: current.tasks.map((task) => ({ ...task, evidenceIds: task.evidenceIds.filter((id) => id !== recordId) })),
+    }));
   }
 
   function addRedTeamTurn(turn: ProjectWorkspace["redTeamTurns"][number]) {
-    setWorkspace({ ...workspace, redTeamTurns: [...workspace.redTeamTurns, turn].slice(-24) });
+    updateWorkspace((current) => ({ ...current, redTeamTurns: [...current.redTeamTurns, turn].slice(-24) }));
+  }
+
+  function updateTask(task: ProjectWorkspace["tasks"][number]) {
+    updateWorkspace((current) => ({ ...current, tasks: current.tasks.map((item) => item.id === task.id ? task : item) }));
+  }
+
+  function resetTasks() {
+    updateWorkspace((current) => {
+      const currentReport = buildWorkspaceReport(current);
+      return { ...current, tasks: createValidationTasks(current.project.id, currentReport) };
+    });
   }
 
   async function copyReport() {
     try {
-      await navigator.clipboard.writeText(report.markdown);
+      const taskNotes = workspace.tasks.length > 0
+        ? `\n## 任务执行记录\n${workspace.tasks.map((task) => `- 第 ${task.day} 天：${task.status === "completed" ? "已完成" : task.status === "failed" ? "未通过" : "待执行"}${task.result ? `；结果：${task.result}` : ""}`).join("\n")}`
+        : "";
+      await navigator.clipboard.writeText(`${report.markdown}${taskNotes}`);
       setCopyState("已复制");
     } catch {
       setCopyState("复制失败");
@@ -114,27 +145,13 @@ export default function App() {
   }
 
   function saveCurrentCalibration() {
-    const round: CalibrationRound = {
-      id: `${Date.now()}-${report.light}`,
-      projectId: workspace.project.id,
-      projectName: workspace.project.name || "未命名项目",
-      createdAt: new Date().toISOString(),
-      stage: workspace.project.currentStage,
-      light: report.light,
-      lightLabel: report.lightLabel,
-      evidenceScore: report.evidenceScore,
-      evidenceLevel: report.evidenceLevel,
-      projectStructureScore: report.projectStructureScore,
-      planScore: report.planScore,
-      currentFocus: report.currentFocus,
-      nextReviewTrigger: report.nextReviewTrigger,
-      gateStatuses: Object.fromEntries(report.roadtestChecks.map((item) => [item.id, item.status])) as CalibrationRound["gateStatuses"],
-      investmentLimit: { days: report.investmentLimit.days, money: report.investmentLimit.money },
-      evidenceRecordIds: workspace.evidenceRecords.map((record) => record.id),
-    };
-    setWorkspace({ ...workspace, rounds: [round, ...workspace.rounds].slice(0, 12) });
-    setSaveState("已保存");
-    window.setTimeout(() => setSaveState("保存本轮"), 1600);
+    updateWorkspace((current) => {
+      const currentReport = buildWorkspaceReport(current);
+      const round = createCalibrationRound(current, currentReport, current.rounds[0]);
+      return { ...current, rounds: [round, ...current.rounds].slice(0, 12) };
+    });
+    setSaveState("校准已保存");
+    window.setTimeout(() => setSaveState("重新校准"), 1600);
   }
 
   return (
@@ -201,15 +218,30 @@ export default function App() {
               onRemove={removeEvidenceRecord}
             />
           )}
-          {activeView === "report" && (
-            <DecisionReportView
+          {activeView === "route" && (
+            <NextRoute
               report={report}
               project={workspace.project}
+              evidence={evidence}
+              records={workspace.evidenceRecords}
+              tasks={workspace.tasks}
+              rounds={workspace.rounds}
               onCopy={copyReport}
               copyState={copyState}
-              onSaveCalibration={saveCurrentCalibration}
+              onResetTasks={resetTasks}
+              onOpenRefill={() => navigate("refill")}
+            />
+          )}
+          {activeView === "refill" && (
+            <EvidenceRefill
+              report={report}
+              tasks={workspace.tasks}
+              records={workspace.evidenceRecords}
+              rounds={workspace.rounds}
+              onTaskChange={updateTask}
+              onOpenBackpack={() => navigate("backpack")}
+              onRecalibrate={saveCurrentCalibration}
               saveState={saveState}
-              history={history}
             />
           )}
         </section>
@@ -238,18 +270,36 @@ export default function App() {
   );
 }
 
-function roundToSnapshot(round: CalibrationRound): CalibrationSnapshot {
-  return {
-    id: round.id,
-    projectId: round.projectId,
-    projectName: round.projectName,
-    createdAt: round.createdAt,
-    stage: round.stage,
-    light: round.light,
-    lightLabel: round.lightLabel,
-    evidenceScore: round.evidenceScore,
-    evidenceLevel: round.evidenceLevel,
-    projectStructureScore: round.projectStructureScore,
-    currentFocus: round.currentFocus,
-  };
+function ensureExecutionState(workspace: ProjectWorkspace): ProjectWorkspace {
+  const report = buildWorkspaceReport(workspace);
+  const hasCurrentTasks = workspace.tasks.length === 7 && workspace.tasks.every((task) => task.projectId === workspace.project.id);
+  const withTasks = hasCurrentTasks ? workspace : { ...workspace, tasks: createValidationTasks(workspace.project.id, report) };
+  const hasCurrentRound = withTasks.rounds.some((round) => round.projectId === workspace.project.id);
+  if (hasCurrentRound) return withTasks;
+  return { ...withTasks, rounds: [createCalibrationRound(withTasks, report)] };
+}
+
+function buildWorkspaceReport(workspace: ProjectWorkspace) {
+  return buildReport(
+    workspace.project,
+    deriveEvidenceSummary(workspace.evidenceRecords),
+    plansToRoadtestPlan(workspace.plans),
+  );
+}
+
+function ensureWorkspaceVersion(workspace: ProjectWorkspace): ProjectWorkspace {
+  return { ...workspace, schemaVersion: 2 };
+}
+
+function projectInputsChanged(previous: Project, current: Project) {
+  return [
+    "description",
+    "targetUser",
+    "painPoint",
+    "alternative",
+    "acquisition",
+    "monetization",
+    "currentStage",
+    "existingArtifact",
+  ].some((key) => previous[key as keyof Project] !== current[key as keyof Project]);
 }

@@ -172,14 +172,30 @@ export interface CalibrationRound {
   evidenceLevel: number;
   projectStructureScore: number;
   planScore: number;
+  lightReason: string;
+  changeSummary: string;
   currentFocus: string;
   nextReviewTrigger: string;
+  reviewAt: string;
   gateStatuses: Record<GateId, RoadtestStatus>;
   investmentLimit: {
     days: number;
     money: number;
   };
   evidenceRecordIds: string[];
+}
+
+export interface CalibrationDiff {
+  lightChanged: boolean;
+  evidenceDelta: number;
+  investmentDaysDelta: number;
+  investmentMoneyDelta: number;
+  changedGates: Array<{
+    id: GateId;
+    before: RoadtestStatus;
+    after: RoadtestStatus;
+  }>;
+  newEvidenceCount: number;
 }
 
 export interface ProjectWorkspace {
