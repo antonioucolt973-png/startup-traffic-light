@@ -3,6 +3,7 @@ export const stageLabels: Record<string, string> = {
   research: "调研中",
   demo: "已有演示版",
   mvp: "已有最小版本",
+  growth: "已有用户运营中",
 };
 
 export function getStageLabel(stage: string) {

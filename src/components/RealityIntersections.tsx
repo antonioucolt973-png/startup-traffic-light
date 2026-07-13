@@ -1,4 +1,5 @@
 import type { DecisionReport, Evidence, RoadtestPlan } from "../types";
+import { RoadMap } from "./RoadMap";
 
 interface RealityIntersectionsProps {
   report: DecisionReport;
@@ -6,6 +7,8 @@ interface RealityIntersectionsProps {
   onEvidenceChange: (evidence: Evidence) => void;
   plan: RoadtestPlan;
   onPlanChange: (plan: RoadtestPlan) => void;
+  activeGate: keyof RoadtestPlan;
+  onActiveGateChange: (gate: keyof RoadtestPlan) => void;
 }
 
 const evidenceControls: Record<
@@ -35,6 +38,8 @@ export function RealityIntersections({
   onEvidenceChange,
   plan,
   onPlanChange,
+  activeGate,
+  onActiveGateChange,
 }: RealityIntersectionsProps) {
   function updatePlan(key: keyof RoadtestPlan, value: string) {
     onPlanChange({ ...plan, [key]: value });
@@ -44,12 +49,14 @@ export function RealityIntersections({
     onEvidenceChange({ ...evidence, [key]: value });
   }
 
+  const item = report.roadtestChecks.find((check) => check.id === activeGate) ?? report.roadtestChecks[0];
+
   return (
     <div className="screenStack">
       <div className="screenHeader">
         <div>
           <p className="microLabel">现实路口</p>
-          <h3>每到一个路口，要么拿证据，要么说清楚怎么验证</h3>
+          <h3>先过需求，再过交易，最后确认能否交付</h3>
         </div>
         <p>红绿灯只认真实证据；好计划只能让你进入路测，不能直接当作已经通过。</p>
       </div>
@@ -71,68 +78,68 @@ export function RealityIntersections({
         </div>
       </div>
 
-      <div className="roadtestList">
-        {report.roadtestChecks.map((item) => (
-          <article key={item.id} className={`roadtestCard status${item.status}`}>
-            <div className="roadtestCardHead">
-              <div>
-                <span>{item.title}</span>
-                <strong>{item.scene}</strong>
-              </div>
-              <em>{item.status}</em>
+      <RoadMap checks={report.roadtestChecks} activeGate={activeGate} onGateChange={onActiveGateChange} />
+
+      <article className={`roadtestCard focusGate status${item.status}`}>
+        <div className="roadtestCardHead">
+          <div>
+            <span>当前检查点 · {item.stage === "demand" ? "需求阶段" : item.stage === "transaction" ? "交易阶段" : "交付阶段"}</span>
+            <strong>{item.title}</strong>
+          </div>
+          <em>{item.status}</em>
+        </div>
+        <p className="gateScene">{item.scene}</p>
+
+        <div className="roadtestGrid">
+          <section className="roadtestEvidence">
+            <span>回填真实证据</span>
+            <p>{item.evidence}</p>
+            <div className="inlineEvidence">
+              {evidenceControls[item.id].map((control) =>
+                control.type === "checkbox" ? (
+                  <label key={control.key} className="miniCheck">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(evidence[control.key])}
+                      onChange={(event) => updateEvidence(control.key, event.target.checked as Evidence[typeof control.key])}
+                    />
+                    <span>{control.label}</span>
+                  </label>
+                ) : (
+                  <label key={control.key} className="miniNumber">
+                    <span>{control.label}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={Number(evidence[control.key])}
+                      onChange={(event) => updateEvidence(control.key, Number(event.target.value) as Evidence[typeof control.key])}
+                    />
+                  </label>
+                ),
+              )}
             </div>
+          </section>
 
-            <div className="roadtestGrid">
-              <section className="roadtestEvidence">
-                <span>已有证据</span>
-                <p>{item.evidence}</p>
-                <div className="inlineEvidence">
-                  {evidenceControls[item.id].map((control) =>
-                    control.type === "checkbox" ? (
-                      <label key={control.key} className="miniCheck">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(evidence[control.key])}
-                          onChange={(event) => updateEvidence(control.key, event.target.checked as Evidence[typeof control.key])}
-                        />
-                        <span>{control.label}</span>
-                      </label>
-                    ) : (
-                      <label key={control.key} className="miniNumber">
-                        <span>{control.label}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={Number(evidence[control.key])}
-                          onChange={(event) => updateEvidence(control.key, Number(event.target.value) as Evidence[typeof control.key])}
-                        />
-                      </label>
-                    ),
-                  )}
-                </div>
-              </section>
+          <section className="roadtestPlanBlock">
+            <label className="roadtestPlan">
+              <span>我的应对方案</span>
+              <textarea
+                value={plan[item.id]}
+                placeholder="写清楚：找谁、做什么、何时完成、什么结果算通过、失败后如何调整。"
+                onChange={(event) => updatePlan(item.id, event.target.value)}
+              />
+            </label>
+          </section>
+        </div>
 
-              <section className="roadtestPlanBlock">
-                <label className="roadtestPlan">
-                  <span>我的验证计划</span>
-                  <textarea
-                    value={plan[item.id]}
-                    placeholder="写清楚：找谁、做什么、几天内完成、什么结果算继续或停止。"
-                    onChange={(event) => updatePlan(item.id, event.target.value)}
-                  />
-                </label>
-              </section>
-            </div>
+        <div className="redTeamInline">
+          <span>红队检查员</span>
+          <p>{item.redTeamPrompt}</p>
+        </div>
 
-            <div className="redTeamInline">
-              <span>红队追问</span>
-              <p>{item.redTeamPrompt}</p>
-            </div>
-
-            <p className="roadtestFeedback">{item.feedback}</p>
-          </article>
-        ))}
-      </div>
+        <p className="roadtestFeedback">{item.feedback}</p>
+      </article>
     </div>
   );
 }

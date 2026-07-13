@@ -22,6 +22,7 @@ export const emptyProject: Project = {
   currentStage: "idea",
   timeInvestedDays: 0,
   moneyInvested: 0,
+  daysSinceLastExternalAction: 0,
   biggestUncertainty: "",
 };
 
@@ -45,15 +46,57 @@ export const emptyRoadtestPlan: RoadtestPlan = {
   delivery: "",
 };
 
+export function normalizeProject(project: Partial<Project> | null | undefined): Project {
+  const source = project ?? {};
+  return {
+    ...emptyProject,
+    id: asText(source.id, emptyProject.id),
+    name: asText(source.name),
+    description: asText(source.description),
+    targetUser: asText(source.targetUser),
+    painPoint: asText(source.painPoint),
+    alternative: asText(source.alternative),
+    acquisition: asText(source.acquisition),
+    monetization: asText(source.monetization),
+    currentStage: asText(source.currentStage, emptyProject.currentStage),
+    timeInvestedDays: asNonNegativeNumber(source.timeInvestedDays),
+    moneyInvested: asNonNegativeNumber(source.moneyInvested),
+    daysSinceLastExternalAction: asNonNegativeNumber(source.daysSinceLastExternalAction),
+    biggestUncertainty: asText(source.biggestUncertainty),
+  };
+}
+
+export function normalizeEvidence(evidence: Partial<Evidence> | null | undefined): Evidence {
+  const source = evidence ?? {};
+  return {
+    competitorResearch: Boolean(source.competitorResearch),
+    interviewCount: asNonNegativeNumber(source.interviewCount),
+    testPostCount: asNonNegativeNumber(source.testPostCount),
+    messageCount: asNonNegativeNumber(source.messageCount),
+    signupCount: asNonNegativeNumber(source.signupCount),
+    demoTrialCount: asNonNegativeNumber(source.demoTrialCount),
+    paymentSignalCount: asNonNegativeNumber(source.paymentSignalCount),
+    retentionSignal: Boolean(source.retentionSignal),
+  };
+}
+
 export function normalizeRoadtestPlan(plan: Partial<RoadtestPlan> | null | undefined): RoadtestPlan {
-  return { ...emptyRoadtestPlan, ...(plan ?? {}) };
+  const source = plan ?? {};
+  return {
+    user: asText(source.user),
+    pain: asText(source.pain),
+    alternative: asText(source.alternative),
+    acquisition: asText(source.acquisition),
+    payment: asText(source.payment),
+    delivery: asText(source.delivery),
+  };
 }
 
 export function buildReport(project: Project, evidence: Evidence, plan: RoadtestPlan = emptyRoadtestPlan): DecisionReport {
   const assumptions = buildAssumptions(project);
   const evidenceScore = scoreEvidence(evidence);
   const evidenceLevel = getEvidenceLevel(evidence);
-  const feasibilityScore = scoreFeasibility(project, evidence);
+  const projectStructureScore = scoreProjectStructure(project);
   const roadtestChecks = buildRoadtestChecks(project, evidence, normalizeRoadtestPlan(plan));
   const planScore = scorePlan(roadtestChecks);
   const planCredibility = getPlanCredibility(planScore);
@@ -61,19 +104,21 @@ export function buildReport(project: Project, evidence: Evidence, plan: Roadtest
   const missingEvidence = getMissingEvidence(evidence);
   const mainRisks = getMainRisks(project, evidence);
   const redTeamQuestions = buildRedTeamQuestions(project, evidence, mainRisks, roadtestChecks);
-  const light = decideLight(project, evidence, evidenceScore, feasibilityScore);
+  const light = decideLight(project, evidence, evidenceScore, evidenceLevel);
   const investmentLimit = getInvestmentLimit(light, evidenceLevel);
-  const sevenDayTasks = buildSevenDayTasks(project, evidence);
+  const sevenDayTasks = buildSevenDayTasks(project, evidence, light);
   const nextActions = sevenDayTasks.slice(0, 3);
   const stopConditions = buildStopConditions(evidence);
   const lightLabel = getLightLabel(light);
-  const lightReason = getLightReason(light, evidenceScore, feasibilityScore);
+  const lightReason = getLightReason(light, project, evidenceScore, evidenceLevel);
+  const currentFocus = getCurrentFocus(project, evidence, light);
+  const nextReviewTrigger = getNextReviewTrigger(light);
 
   const report: Omit<DecisionReport, "markdown"> = {
     light,
     lightLabel,
     lightReason,
-    feasibilityScore,
+    projectStructureScore,
     evidenceScore,
     evidenceLevel,
     planScore,
@@ -83,6 +128,8 @@ export function buildReport(project: Project, evidence: Evidence, plan: Roadtest
     redTeamQuestions,
     mainRisks,
     missingEvidence,
+    currentFocus,
+    nextReviewTrigger,
     deliveryPath,
     investmentLimit,
     nextActions,
@@ -140,9 +187,12 @@ function buildAssumptions(project: Project): Assumption[] {
 }
 
 function buildRoadtestChecks(project: Project, evidence: Evidence, plan: RoadtestPlan): RoadtestCheck[] {
+  const mustLeaveTheBuilding = shouldForceExternalAction(project, evidence);
+  const externalActionWarning = getExternalActionWarning(project);
   const checks: RoadtestCheck[] = [
     {
       id: "user",
+      stage: "demand",
       title: "目标用户站",
       scene: "现实里先看这个人是不是具体存在，以及他是否真的被痛点困扰。",
       evidence:
@@ -159,6 +209,7 @@ function buildRoadtestChecks(project: Project, evidence: Evidence, plan: Roadtes
     },
     {
       id: "pain",
+      stage: "demand",
       title: "痛点路口",
       scene: "用户说有兴趣不够。现实会问：这个问题是否足够痛、足够频繁、值得马上解决？",
       evidence:
@@ -175,6 +226,7 @@ function buildRoadtestChecks(project: Project, evidence: Evidence, plan: Roadtes
     },
     {
       id: "alternative",
+      stage: "demand",
       title: "替代方案站",
       scene: "用户现在一定有替代方案。换不用你的旧办法，必须有明确理由。",
       evidence: project.alternative
@@ -190,6 +242,7 @@ function buildRoadtestChecks(project: Project, evidence: Evidence, plan: Roadtes
     },
     {
       id: "acquisition",
+      stage: "transaction",
       title: "获客入口站",
       scene: "不是问你打算在哪个平台发，而是第一批 20 个具体用户从哪里来。",
       evidence:
@@ -198,14 +251,20 @@ function buildRoadtestChecks(project: Project, evidence: Evidence, plan: Roadtes
           : "测试内容和主动反馈还不够，获客入口没有被验证。",
       plan: plan.acquisition,
       redTeamPrompt: "不要写“小红书/社群”。你要发给谁？标题是什么？48 小时内多少主动反馈算入口有效？",
-      ...evaluateGate(
-        evidence.testPostCount >= 2 && evidence.messageCount >= 3,
-        plan.acquisition,
-        "写清楚具体社群、名单或内容题目，以及用什么主动反馈判断入口有效。",
-      ),
+      ...(mustLeaveTheBuilding
+        ? {
+            status: "立即行动" as const,
+            feedback: externalActionWarning,
+          }
+        : evaluateGate(
+            evidence.testPostCount >= 2 && evidence.messageCount >= 3,
+            plan.acquisition,
+            "写清楚具体社群、名单或内容题目，以及用什么主动反馈判断入口有效。",
+          )),
     },
     {
       id: "payment",
+      stage: "transaction",
       title: "付费阻力站",
       scene: "感兴趣不是付费信号。现实会问：谁现在愿意为哪个结果付多少钱？",
       evidence:
@@ -222,6 +281,7 @@ function buildRoadtestChecks(project: Project, evidence: Evidence, plan: Roadtes
     },
     {
       id: "delivery",
+      stage: "delivery",
       title: "交付压力站",
       scene: "一人项目最容易死在交付过大。先证明核心价值，不先做完整系统。",
       evidence:
@@ -275,6 +335,7 @@ function scorePlan(checks: RoadtestCheck[]): number {
     可路测: 72,
     计划太虚: 38,
     先停手: 8,
+    立即行动: 18,
   };
   return Math.round(checks.reduce((total, item) => total + points[item.status], 0) / checks.length);
 }
@@ -309,39 +370,59 @@ function getEvidenceLevel(evidence: Evidence): number {
   return 0;
 }
 
-function scoreFeasibility(project: Project, evidence: Evidence): number {
-  let score = 20;
-  if (project.targetUser.length > 8) score += 12;
-  if (project.painPoint.length > 12) score += 14;
-  if (project.alternative.length > 8) score += 10;
-  if (project.acquisition.length > 8) score += 12;
-  if (project.monetization.length > 6) score += 10;
-  if (project.biggestUncertainty.length > 8) score += 8;
-  if (evidence.interviewCount >= 3) score += 6;
-  if (evidence.messageCount > 0 || evidence.demoTrialCount > 0) score += 5;
-  if (evidence.paymentSignalCount > 0) score += 8;
-  if (project.timeInvestedDays > 14 && evidence.demoTrialCount === 0) score -= 12;
-  if (project.moneyInvested > 1000 && evidence.paymentSignalCount === 0) score -= 10;
-  return clamp(score, 0, 100);
+function scoreProjectStructure(project: Project): number {
+  const fields = [
+    project.targetUser,
+    project.painPoint,
+    project.alternative,
+    project.acquisition,
+    project.monetization,
+    project.biggestUncertainty,
+  ];
+
+  return Math.round((fields.filter((value) => Boolean(value.trim())).length / fields.length) * 100);
 }
 
 function decideLight(
   project: Project,
   evidence: Evidence,
   evidenceScore: number,
-  feasibilityScore: number,
+  evidenceLevel: number,
 ): Light {
-  const hasNoExternalFeedback =
-    evidence.interviewCount === 0 &&
-    evidence.testPostCount === 0 &&
-    evidence.messageCount === 0 &&
-    evidence.demoTrialCount === 0 &&
-    evidence.paymentSignalCount === 0;
+  const overCommitted =
+    (project.moneyInvested > 2000 && evidenceScore < 35 && evidence.paymentSignalCount === 0) ||
+    (project.timeInvestedDays >= 21 && evidenceLevel < 3);
+  const strongEvidence =
+    evidence.paymentSignalCount > 0 ||
+    (evidence.retentionSignal && evidence.demoTrialCount >= 3 && evidence.messageCount >= 3);
 
-  if (hasNoExternalFeedback && project.timeInvestedDays >= 3) return "blue";
-  if (evidenceScore >= 68 && feasibilityScore >= 64) return "green";
-  if (feasibilityScore < 38 || (project.moneyInvested > 2000 && evidenceScore < 35)) return "red";
+  if (overCommitted) return "red";
+  if (strongEvidence) return "green";
+  if (shouldForceExternalAction(project, evidence)) return "blue";
   return "yellow";
+}
+
+function shouldForceExternalAction(project: Project, evidence: Evidence): boolean {
+  const hasDemo = project.currentStage === "demo" || project.currentStage === "mvp";
+  const externalActions =
+    evidence.interviewCount +
+    evidence.testPostCount +
+    evidence.messageCount +
+    evidence.demoTrialCount +
+    evidence.paymentSignalCount;
+
+  if (externalActions > 0) return false;
+
+  const idleThreshold = hasDemo ? 5 : 14;
+  return project.daysSinceLastExternalAction >= idleThreshold;
+}
+
+function getExternalActionWarning(project: Project): string {
+  const hasDemo = project.currentStage === "demo" || project.currentStage === "mvp";
+  if (hasDemo) {
+    return `已有可展示成果，且已 ${project.daysSinceLastExternalAction} 天没有真实用户行动。先发给具体用户，不要再用内部打磨替代验证。`;
+  }
+  return `项目已 ${project.daysSinceLastExternalAction} 天没有真实用户行动。停止继续空想或收集资料，先完成一次访谈、触达或测试发布。`;
 }
 
 function getMissingEvidence(evidence: Evidence): string[] {
@@ -373,7 +454,9 @@ function buildRedTeamQuestions(
   risks: string[],
   checks: RoadtestCheck[],
 ): RedTeamQuestion[] {
-  const weakestGate = checks.find((item) => item.status === "先停手" || item.status === "计划太虚");
+  const weakestGate = checks.find(
+    (item) => item.status === "先停手" || item.status === "计划太虚" || item.status === "立即行动",
+  );
   const questions: RedTeamQuestion[] = [
     {
       role: "用户红队",
@@ -416,7 +499,7 @@ function buildRedTeamQuestions(
 }
 
 function getDeliveryPath(project: Project, evidence: Evidence): string {
-  if (project.currentStage === "demo" || evidence.demoTrialCount > 0) {
+  if (project.currentStage === "demo" || project.currentStage === "mvp" || project.currentStage === "growth" || evidence.demoTrialCount > 0) {
     return "一人可做：保留核心流程，继续迭代最小版本，但每次迭代必须绑定一个验证指标。";
   }
   if (project.timeInvestedDays <= 7 && project.moneyInvested <= 500) {
@@ -457,8 +540,46 @@ function getInvestmentLimit(light: Light, evidenceLevel: number) {
   };
 }
 
-function buildSevenDayTasks(project: Project, evidence: Evidence): string[] {
+function buildSevenDayTasks(project: Project, evidence: Evidence, light: Light): string[] {
   const user = project.targetUser || "目标用户";
+  if (light === "red") {
+    return [
+      "第 1 天：冻结新增开发、外包和投放，只保留已有成果。",
+      `第 2 天：列出 10 个${user}，完成至少 3 次问题访谈，不介绍产品。`,
+      "第 3 天：记录用户最近一次遇到问题时怎么处理、花了什么成本。",
+      "第 4 天：用截图或人工服务邀请 3 人体验，不做新功能。",
+      "第 5 天：对一位意向用户提出明确报价或预订动作。",
+      "第 6 天：整理拒绝理由，判断是用户、痛点还是付费假设不成立。",
+      "第 7 天：只有出现真实试用或付费信号，才解除冻结并重新校准。",
+    ];
+  }
+  if (light === "blue") {
+    const hasDemo = project.currentStage === "demo" || project.currentStage === "mvp";
+    return [
+      hasDemo
+        ? "第 1 天：停止修改非核心界面，选定当前可演示的最小流程。"
+        : "第 1 天：停止继续收集资料或空想，选定一个具体用户群和一条对外验证方式。",
+      `第 2 天：从已有渠道列出 5 个${user}，逐个发出试用邀请。`,
+      hasDemo
+        ? "第 3 天：录制 60 秒演示或准备人工服务，发送给已触达对象。"
+        : "第 3 天：准备 3 个访谈问题和一条触达消息，只验证问题是否真实存在。",
+      "第 4 天：安排至少 3 次试用或问题访谈，记录原话和拒绝理由。",
+      "第 5 天：向有兴趣的人提出明确下一步：试用、预约或报价。",
+      "第 6 天：回访有反馈的人，确认是否愿意继续使用或推荐。",
+      "第 7 天：回填外部行为证据，再决定继续迭代还是调整方向。",
+    ];
+  }
+  if (light === "green") {
+    return [
+      "第 1 天：列出已验证的用户行为，明确本轮只服务一个核心场景。",
+      "第 2 天：从试用反馈中选择最高频的一个问题，不扩展其他功能。",
+      "第 3 天：交付一个可重复使用的最小流程，并邀请下一批用户试用。",
+      "第 4 天：跟踪试用后的复用、留存或转介绍，不只看首次兴趣。",
+      "第 5 天：验证价格、交付成本和用户期待是否匹配。",
+      "第 6 天：删除没有证据支持的功能和渠道假设。",
+      "第 7 天：按复用、付款和交付成本决定下一轮受控投入。",
+    ];
+  }
   return [
     `第 1 天：列出 20 个${user}，完成 5 个问题访谈，确认痛点是否真实。`,
     `第 2 天：整理替代方案对比，写出用户为什么可能从旧方案切换。`,
@@ -492,11 +613,39 @@ function getLightLabel(light: Light): string {
   }[light];
 }
 
-function getLightReason(light: Light, evidenceScore: number, feasibilityScore: number): string {
+function getLightReason(light: Light, project: Project, evidenceScore: number, evidenceLevel: number): string {
   if (light === "green") return "已有较强外部反馈，可以做受控 MVP 或继续迭代。";
-  if (light === "red") return "关键假设薄弱，继续投入会放大风险。";
-  if (light === "blue") return "想法停留在内部打磨，缺少真实外部反馈。";
-  return `方向可能成立，但证据充分度 ${evidenceScore}/100、可行性 ${feasibilityScore}/100，还不能加大投入。`;
+  if (light === "red") return "投入已明显跑在证据前面，继续加码会放大风险，先冻结开发并补真实反馈。";
+  if (light === "blue") {
+    const hasDemo = project.currentStage === "demo" || project.currentStage === "mvp";
+    return hasDemo
+      ? "已有可展示成果，却长期没有外部行动。当前任务不是继续打磨，而是立即走向真实用户。"
+      : "项目长期没有真实用户行动。当前任务不是继续空想或收集资料，而是先完成一次真实触达。";
+  }
+  return `项目结构已被描述，但证据仅在第 ${evidenceLevel} 级（${evidenceScore}/100），还不能加大投入。`;
+}
+
+function getCurrentFocus(project: Project, evidence: Evidence, light: Light): string {
+  if (light === "red") return "先冻结投入，回到真实用户问题与最小验证物。";
+  if (light === "blue") return "停止内部打磨，用当前成果接触用户并记录真实反应。";
+  if (project.currentStage === "idea" || project.currentStage === "research") {
+    return "优先验证需求是否存在：用户、痛点和替代方案不能只靠猜测。";
+  }
+  if (project.currentStage === "demo") {
+    return "优先验证最小价值是否被感知：试用、主动反馈和初步报价。";
+  }
+  if (project.currentStage === "mvp") {
+    return "优先验证能否持续成交和交付：价格、成本、复用与留存。";
+  }
+  if (evidence.retentionSignal) return "优先验证留存与交付效率，避免在已有用户时盲目扩功能。";
+  return "优先补齐当前最薄弱的现实证据，再决定下一轮投入。";
+}
+
+function getNextReviewTrigger(light: Light): string {
+  if (light === "red") return "完成 3 次真实访谈或得到第一条试用信号后，立即重新校准。";
+  if (light === "blue") return "完成首次真实触达、3 次访谈/试用或收到明确拒绝后，立即重新校准。";
+  if (light === "green") return "出现新的付款、复用、流失或交付成本变化后，重新校准下一轮投入。";
+  return "完成本轮 7 天路测，或任一关键证据发生变化后，重新校准。";
 }
 
 function toMarkdown(project: Project, report: Omit<DecisionReport, "markdown">): string {
@@ -508,7 +657,7 @@ ${report.lightLabel}
 ${report.lightReason}
 
 ## 分数
-- 项目可行性：${report.feasibilityScore}/100
+- 项目结构清晰度：${report.projectStructureScore}/100
 - 证据充分度：${report.evidenceScore}/100
 - 证据阶梯：第 ${report.evidenceLevel} 级
 - 补证计划可信度：${report.planCredibility}（${report.planScore}/100）
@@ -521,6 +670,12 @@ ${report.mainRisks.map((risk) => `- ${risk}`).join("\n")}
 
 ## 缺失证据
 ${report.missingEvidence.map((item) => `- ${item}`).join("\n")}
+
+## 本轮重点
+${report.currentFocus}
+
+## 下次校准时机
+${report.nextReviewTrigger}
 
 ## 交付路径
 ${report.deliveryPath}
@@ -540,4 +695,12 @@ ${report.stopConditions.map((condition) => `- ${condition}`).join("\n")}
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function asText(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asNonNegativeNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
 }

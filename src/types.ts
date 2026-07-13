@@ -12,6 +12,7 @@ export interface Project {
   currentStage: string;
   timeInvestedDays: number;
   moneyInvested: number;
+  daysSinceLastExternalAction: number;
   biggestUncertainty: string;
 }
 
@@ -26,13 +27,29 @@ export interface Evidence {
   retentionSignal: boolean;
 }
 
+export interface CalibrationSnapshot {
+  id: string;
+  projectId: string;
+  projectName: string;
+  createdAt: string;
+  stage: string;
+  light: Light;
+  lightLabel: string;
+  evidenceScore: number;
+  evidenceLevel: number;
+  projectStructureScore: number;
+  currentFocus: string;
+}
+
 export interface Assumption {
   title: string;
   summary: string;
   risk: "低" | "中" | "高";
 }
 
-export type RoadtestStatus = "已通过" | "可路测" | "计划太虚" | "先停手";
+export type RoadtestStatus = "已通过" | "可路测" | "计划太虚" | "先停手" | "立即行动";
+
+export type RoadtestStage = "demand" | "transaction" | "delivery";
 
 export interface RoadtestPlan {
   user: string;
@@ -45,6 +62,7 @@ export interface RoadtestPlan {
 
 export interface RoadtestCheck {
   id: keyof RoadtestPlan;
+  stage: RoadtestStage;
   title: string;
   scene: string;
   evidence: string;
@@ -64,7 +82,7 @@ export interface DecisionReport {
   light: Light;
   lightLabel: string;
   lightReason: string;
-  feasibilityScore: number;
+  projectStructureScore: number;
   evidenceScore: number;
   evidenceLevel: number;
   planScore: number;
@@ -74,6 +92,8 @@ export interface DecisionReport {
   redTeamQuestions: RedTeamQuestion[];
   mainRisks: string[];
   missingEvidence: string[];
+  currentFocus: string;
+  nextReviewTrigger: string;
   deliveryPath: string;
   investmentLimit: {
     days: number;
