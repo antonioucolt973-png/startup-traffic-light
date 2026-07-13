@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { Backpack, ClipboardCheck, Flag, Map, Route, Sparkles } from "lucide-react";
 import { DecisionReportView } from "./components/DecisionReport";
+import { EvidenceBackpack } from "./components/EvidenceBackpack";
+import { GateChallenge } from "./components/GateChallenge";
 import { JourneyMapScreen } from "./components/JourneyMapScreen";
 import { ProjectCar } from "./components/ProjectCar";
 import { ProjectDeparture } from "./components/ProjectDeparture";
-import { RealityIntersections } from "./components/RealityIntersections";
 import { TrafficLight } from "./components/TrafficLight";
 import { exampleCases } from "./data/examples";
 import {
@@ -24,19 +25,18 @@ import {
 import type {
   CalibrationRound,
   CalibrationSnapshot,
-  Evidence,
   GateId,
   Project,
   ProjectWorkspace,
-  RoadtestPlan,
 } from "./types";
 
-type ViewId = "departure" | "map" | "gate" | "report";
+type ViewId = "departure" | "map" | "gate" | "backpack" | "report";
 
 const views: Array<{ id: ViewId; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { id: "departure", label: "项目出发", icon: Flag },
   { id: "map", label: "路线总览", icon: Map },
   { id: "gate", label: "现实路口", icon: Route },
+  { id: "backpack", label: "证据背包", icon: Backpack },
   { id: "report", label: "下一程路线", icon: ClipboardCheck },
 ];
 
@@ -72,28 +72,6 @@ export default function App() {
     setWorkspace({ ...workspace, project: normalizeProject(project) });
   }
 
-  function setEvidence(next: Evidence) {
-    setWorkspace({
-      ...workspace,
-      evidenceRecords: evidenceSummaryToRecords(workspace.project.id, next),
-    });
-  }
-
-  function setLegacyPlan(next: RoadtestPlan) {
-    const plans = normalizeGatePlans(workspace.plans);
-    setWorkspace({
-      ...workspace,
-      plans: {
-        user: { ...plans.user, action: next.user },
-        pain: { ...plans.pain, action: next.pain },
-        alternative: { ...plans.alternative, action: next.alternative },
-        acquisition: { ...plans.acquisition, action: next.acquisition },
-        payment: { ...plans.payment, action: next.payment },
-        delivery: { ...plans.delivery, action: next.delivery },
-      },
-    });
-  }
-
   function loadExample(index: number) {
     const example = exampleCases[index];
     const next = createEmptyWorkspace(example.project);
@@ -107,6 +85,22 @@ export default function App() {
   function enterGate(gate: GateId = activeGate) {
     setActiveGate(gate);
     navigate("gate");
+  }
+
+  function updateActivePlan(plan: ProjectWorkspace["plans"][GateId]) {
+    setWorkspace({ ...workspace, plans: { ...workspace.plans, [activeGate]: plan } });
+  }
+
+  function addEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
+    setWorkspace({ ...workspace, evidenceRecords: [record, ...workspace.evidenceRecords] });
+  }
+
+  function removeEvidenceRecord(recordId: string) {
+    setWorkspace({ ...workspace, evidenceRecords: workspace.evidenceRecords.filter((record) => record.id !== recordId) });
+  }
+
+  function addRedTeamTurn(turn: ProjectWorkspace["redTeamTurns"][number]) {
+    setWorkspace({ ...workspace, redTeamTurns: [...workspace.redTeamTurns, turn].slice(-24) });
   }
 
   async function copyReport() {
@@ -186,14 +180,25 @@ export default function App() {
             />
           )}
           {activeView === "gate" && (
-            <RealityIntersections
+            <GateChallenge
+              project={workspace.project}
               report={report}
               evidence={evidence}
-              onEvidenceChange={setEvidence}
-              plan={roadtestPlan}
-              onPlanChange={setLegacyPlan}
               activeGate={activeGate}
               onActiveGateChange={setActiveGate}
+              plan={workspace.plans[activeGate]}
+              onPlanChange={updateActivePlan}
+              turns={workspace.redTeamTurns}
+              onAddTurn={addRedTeamTurn}
+              onOpenBackpack={() => navigate("backpack")}
+            />
+          )}
+          {activeView === "backpack" && (
+            <EvidenceBackpack
+              project={workspace.project}
+              records={workspace.evidenceRecords}
+              onAdd={addEvidenceRecord}
+              onRemove={removeEvidenceRecord}
             />
           )}
           {activeView === "report" && (

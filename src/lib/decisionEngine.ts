@@ -149,12 +149,15 @@ export function plansToRoadtestPlan(plans: GatePlans): RoadtestPlan {
 }
 
 export function deriveEvidenceSummary(records: EvidenceRecord[]): Evidence {
+  const eligibleRecords = records.filter(
+    (record) => record.source !== "ai_inference" && record.source !== "founder_assumption",
+  );
   const total = (type: EvidenceRecord["type"]) =>
-    records.filter((record) => record.type === type).reduce((sum, record) => sum + Math.max(0, record.quantity), 0);
+    eligibleRecords.filter((record) => record.type === type).reduce((sum, record) => sum + Math.max(0, record.quantity), 0);
 
   return {
     competitorResearch: total("research") > 0,
-    interviewCount: total("interview"),
+    interviewCount: total("interview") + total("problem_story"),
     testPostCount: total("test_post"),
     messageCount: total("active_interest"),
     signupCount: total("signup"),
@@ -486,7 +489,7 @@ function decideLight(
 }
 
 function shouldForceExternalAction(project: Project, evidence: Evidence): boolean {
-  const hasDemo = project.currentStage === "demo" || project.currentStage === "mvp";
+  const hasDemo = hasShowableArtifact(project);
   const externalActions =
     evidence.interviewCount +
     evidence.testPostCount +
@@ -501,7 +504,7 @@ function shouldForceExternalAction(project: Project, evidence: Evidence): boolea
 }
 
 function getExternalActionWarning(project: Project): string {
-  const hasDemo = project.currentStage === "demo" || project.currentStage === "mvp";
+  const hasDemo = hasShowableArtifact(project);
   if (hasDemo) {
     return `已有可展示成果，且已 ${project.daysSinceLastExternalAction} 天没有真实用户行动。先发给具体用户，不要再用内部打磨替代验证。`;
   }
@@ -637,7 +640,7 @@ function buildSevenDayTasks(project: Project, evidence: Evidence, light: Light):
     ];
   }
   if (light === "blue") {
-    const hasDemo = project.currentStage === "demo" || project.currentStage === "mvp";
+    const hasDemo = hasShowableArtifact(project);
     return [
       hasDemo
         ? "第 1 天：停止修改非核心界面，选定当前可演示的最小流程。"
@@ -700,7 +703,7 @@ function getLightReason(light: Light, project: Project, evidenceScore: number, e
   if (light === "green") return "已有较强外部反馈，可以做受控 MVP 或继续迭代。";
   if (light === "red") return "投入已明显跑在证据前面，继续加码会放大风险，先冻结开发并补真实反馈。";
   if (light === "blue") {
-    const hasDemo = project.currentStage === "demo" || project.currentStage === "mvp";
+    const hasDemo = hasShowableArtifact(project);
     return hasDemo
       ? "已有可展示成果，却长期没有外部行动。当前任务不是继续打磨，而是立即走向真实用户。"
       : "项目长期没有真实用户行动。当前任务不是继续空想或收集资料，而是先完成一次真实触达。";
@@ -778,6 +781,10 @@ ${report.stopConditions.map((condition) => `- ${condition}`).join("\n")}
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function hasShowableArtifact(project: Project): boolean {
+  return project.hasDemo || Boolean(project.existingArtifact.trim()) || ["demo", "mvp", "growth"].includes(project.currentStage);
 }
 
 function asText(value: unknown, fallback = ""): string {

@@ -142,6 +142,7 @@ export interface RedTeamTurn {
   question: string;
   answer: string;
   feedback: string;
+  nextQuestion?: string;
   source: "ai" | "fallback";
   createdAt: string;
 }
