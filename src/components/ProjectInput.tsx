@@ -1,9 +1,10 @@
-import type { Project } from "../types";
+import type { Assumption, Project } from "../types";
 import { stageLabels } from "../lib/labels";
 
 interface ProjectInputProps {
   project: Project;
   onChange: (project: Project) => void;
+  assumptions: Assumption[];
 }
 
 const textFields: Array<{ key: keyof Project; label: string; placeholder: string; multiline?: boolean }> = [
@@ -17,7 +18,7 @@ const textFields: Array<{ key: keyof Project; label: string; placeholder: string
   { key: "biggestUncertainty", label: "最大不确定性", placeholder: "当前最需要验证的一件事", multiline: true },
 ];
 
-export function ProjectInput({ project, onChange }: ProjectInputProps) {
+export function ProjectInput({ project, onChange, assumptions }: ProjectInputProps) {
   function update<K extends keyof Project>(key: K, value: Project[K]) {
     onChange({ ...project, [key]: value });
   }
@@ -59,6 +60,7 @@ export function ProjectInput({ project, onChange }: ProjectInputProps) {
             <option value="research">{stageLabels.research}</option>
             <option value="demo">{stageLabels.demo}</option>
             <option value="mvp">{stageLabels.mvp}</option>
+            <option value="growth">{stageLabels.growth}</option>
           </select>
         </label>
 
@@ -81,7 +83,38 @@ export function ProjectInput({ project, onChange }: ProjectInputProps) {
             onChange={(event) => update("moneyInvested", Number(event.target.value))}
           />
         </label>
+
+        <label className="field">
+          <span>距上次真实用户行动（天）</span>
+          <input
+            type="number"
+            min={0}
+            value={project.daysSinceLastExternalAction}
+            onChange={(event) => update("daysSinceLastExternalAction", Number(event.target.value))}
+          />
+        </label>
       </div>
+
+      <section className="assumptionSection">
+        <div className="sectionIntro">
+          <div>
+            <p className="microLabel">关键假设拆解</p>
+            <h4>这些不是结论，而是之后要用证据验证的前提。</h4>
+          </div>
+          <span>输入越完整，路测问题越准确；不会因此直接获得更高灯号。</span>
+        </div>
+        <div className="assumptionGrid">
+          {assumptions.map((assumption) => (
+            <article key={assumption.title} className={`assumptionCard risk${assumption.risk}`}>
+              <div>
+                <strong>{assumption.title}</strong>
+                <span>{assumption.risk}风险</span>
+              </div>
+              <p>{assumption.summary}</p>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { ClipboardList, FileText, Radar } from "lucide-react";
+import { ClipboardList, FileText, Home, Radar } from "lucide-react";
 import { DecisionReportView } from "./components/DecisionReport";
+import { HomeScreen } from "./components/HomeScreen";
 import { ProjectInput } from "./components/ProjectInput";
 import { RealityIntersections } from "./components/RealityIntersections";
 import { StepRail } from "./components/StepRail";
@@ -11,37 +12,49 @@ import {
   emptyEvidence,
   emptyProject,
   emptyRoadtestPlan,
+  normalizeEvidence,
+  normalizeProject,
   normalizeRoadtestPlan,
 } from "./lib/decisionEngine";
 import { getStageLabel } from "./lib/labels";
 import {
   loadEvidence,
+  loadCalibrationHistory,
   loadProject,
   loadRoadtestPlan,
+  saveCalibrationHistory,
   saveEvidence,
   saveProject,
   saveRoadtestPlan,
 } from "./lib/storage";
-import type { Evidence, Project, RoadtestPlan } from "./types";
+import type { CalibrationSnapshot, Evidence, Project, RoadtestPlan } from "./types";
 
-type StepId = "input" | "intersections" | "report";
+type StepId = "home" | "input" | "intersections" | "report";
 
 const steps: Array<{ id: StepId; label: string; icon: React.ComponentType<{ size?: number }> }> = [
+  { id: "home", label: "首页", icon: Home },
   { id: "input", label: "项目上路", icon: ClipboardList },
   { id: "intersections", label: "现实路口", icon: Radar },
   { id: "report", label: "节奏校准单", icon: FileText },
 ];
 
 export default function App() {
-  const [project, setProjectState] = useState<Project>(() => loadProject() ?? emptyProject);
-  const [evidence, setEvidenceState] = useState<Evidence>(() => loadEvidence() ?? emptyEvidence);
+  const [project, setProjectState] = useState<Project>(() => normalizeProject(loadProject() ?? emptyProject));
+  const [evidence, setEvidenceState] = useState<Evidence>(() => normalizeEvidence(loadEvidence() ?? emptyEvidence));
   const [roadtestPlan, setRoadtestPlanState] = useState<RoadtestPlan>(() =>
     normalizeRoadtestPlan(loadRoadtestPlan()),
   );
-  const [activeStep, setActiveStep] = useState<StepId>("input");
+  const [activeStep, setActiveStep] = useState<StepId>("home");
+  const [activeGate, setActiveGate] = useState<keyof RoadtestPlan>("user");
   const [copyState, setCopyState] = useState("复制报告");
+  const [saveState, setSaveState] = useState("保存本轮");
+  const [calibrationHistory, setCalibrationHistory] = useState<CalibrationSnapshot[]>(() => loadCalibrationHistory());
 
   const report = useMemo(() => buildReport(project, evidence, roadtestPlan), [project, evidence, roadtestPlan]);
+  const projectHistory = useMemo(
+    () => calibrationHistory.filter((snapshot) => snapshot.projectId === project.id),
+    [calibrationHistory, project.id],
+  );
   const currentIndex = steps.findIndex((step) => step.id === activeStep);
 
   function setProject(next: Project) {
@@ -64,6 +77,7 @@ export default function App() {
     setProject(example.project);
     setEvidence(example.evidence);
     setRoadtestPlan(emptyRoadtestPlan);
+    setActiveGate("user");
     setActiveStep("intersections");
   }
 
@@ -81,6 +95,27 @@ export default function App() {
       setCopyState("复制失败");
       window.setTimeout(() => setCopyState("复制报告"), 1600);
     }
+  }
+
+  function saveCurrentCalibration() {
+    const snapshot: CalibrationSnapshot = {
+      id: `${Date.now()}-${report.light}`,
+      projectId: project.id,
+      projectName: project.name || "未命名项目",
+      createdAt: new Date().toISOString(),
+      stage: project.currentStage,
+      light: report.light,
+      lightLabel: report.lightLabel,
+      evidenceScore: report.evidenceScore,
+      evidenceLevel: report.evidenceLevel,
+      projectStructureScore: report.projectStructureScore,
+      currentFocus: report.currentFocus,
+    };
+    const next = [snapshot, ...calibrationHistory].slice(0, 12);
+    setCalibrationHistory(next);
+    saveCalibrationHistory(next);
+    setSaveState("已保存");
+    window.setTimeout(() => setSaveState("保存本轮"), 1600);
   }
 
   return (
@@ -129,7 +164,12 @@ export default function App() {
 
         <div className="contentGrid">
           <section className="mainStage">
-            {activeStep === "input" && <ProjectInput project={project} onChange={setProject} />}
+            {activeStep === "home" && (
+              <HomeScreen onStart={() => setActiveStep("input")} calibrationCount={calibrationHistory.length} />
+            )}
+            {activeStep === "input" && (
+              <ProjectInput project={project} onChange={setProject} assumptions={report.assumptions} />
+            )}
             {activeStep === "intersections" && (
               <RealityIntersections
                 report={report}
@@ -137,10 +177,20 @@ export default function App() {
                 onEvidenceChange={setEvidence}
                 plan={roadtestPlan}
                 onPlanChange={setRoadtestPlan}
+                activeGate={activeGate}
+                onActiveGateChange={setActiveGate}
               />
             )}
             {activeStep === "report" && (
-              <DecisionReportView report={report} project={project} onCopy={copyReport} copyState={copyState} />
+              <DecisionReportView
+                report={report}
+                project={project}
+                onCopy={copyReport}
+                copyState={copyState}
+                onSaveCalibration={saveCurrentCalibration}
+                saveState={saveState}
+                history={projectHistory}
+              />
             )}
           </section>
 
