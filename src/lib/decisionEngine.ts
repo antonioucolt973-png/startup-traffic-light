@@ -92,6 +92,16 @@ export function normalizeRoadtestPlan(plan: Partial<RoadtestPlan> | null | undef
   };
 }
 
+export function getMissingMinimumProjectFields(project: Project): string[] {
+  const fields = [
+    [project.name, "项目名"],
+    [project.targetUser, "目标用户"],
+    [project.painPoint, "用户痛点"],
+  ] as const;
+
+  return fields.filter(([value]) => !value.trim()).map(([, label]) => label);
+}
+
 export function buildReport(project: Project, evidence: Evidence, plan: RoadtestPlan = emptyRoadtestPlan): DecisionReport {
   const assumptions = buildAssumptions(project);
   const evidenceScore = scoreEvidence(evidence);

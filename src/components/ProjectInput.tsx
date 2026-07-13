@@ -5,6 +5,7 @@ interface ProjectInputProps {
   project: Project;
   onChange: (project: Project) => void;
   assumptions: Assumption[];
+  missingFields: string[];
 }
 
 const textFields: Array<{ key: keyof Project; label: string; placeholder: string; multiline?: boolean }> = [
@@ -18,7 +19,7 @@ const textFields: Array<{ key: keyof Project; label: string; placeholder: string
   { key: "biggestUncertainty", label: "最大不确定性", placeholder: "当前最需要验证的一件事", multiline: true },
 ];
 
-export function ProjectInput({ project, onChange, assumptions }: ProjectInputProps) {
+export function ProjectInput({ project, onChange, assumptions, missingFields }: ProjectInputProps) {
   function update<K extends keyof Project>(key: K, value: Project[K]) {
     onChange({ ...project, [key]: value });
   }
@@ -94,6 +95,12 @@ export function ProjectInput({ project, onChange, assumptions }: ProjectInputPro
           />
         </label>
       </div>
+
+      {missingFields.length > 0 && (
+        <div className="inputValidation" role="alert">
+          请先补充：{missingFields.join("、")}。这三项是进入现实路测的最低前提。
+        </div>
+      )}
 
       <section className="assumptionSection">
         <div className="sectionIntro">

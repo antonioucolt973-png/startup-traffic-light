@@ -12,6 +12,7 @@ import {
   emptyEvidence,
   emptyProject,
   emptyRoadtestPlan,
+  getMissingMinimumProjectFields,
   normalizeEvidence,
   normalizeProject,
   normalizeRoadtestPlan,
@@ -46,11 +47,13 @@ export default function App() {
   );
   const [activeStep, setActiveStep] = useState<StepId>("home");
   const [activeGate, setActiveGate] = useState<keyof RoadtestPlan>("user");
+  const [showInputValidation, setShowInputValidation] = useState(false);
   const [copyState, setCopyState] = useState("复制报告");
   const [saveState, setSaveState] = useState("保存本轮");
   const [calibrationHistory, setCalibrationHistory] = useState<CalibrationSnapshot[]>(() => loadCalibrationHistory());
 
   const report = useMemo(() => buildReport(project, evidence, roadtestPlan), [project, evidence, roadtestPlan]);
+  const missingInputFields = useMemo(() => getMissingMinimumProjectFields(project), [project]);
   const projectHistory = useMemo(
     () => calibrationHistory.filter((snapshot) => snapshot.projectId === project.id),
     [calibrationHistory, project.id],
@@ -60,6 +63,7 @@ export default function App() {
   function setProject(next: Project) {
     setProjectState(next);
     saveProject(next);
+    if (getMissingMinimumProjectFields(next).length === 0) setShowInputValidation(false);
   }
 
   function setEvidence(next: Evidence) {
@@ -78,10 +82,15 @@ export default function App() {
     setEvidence(example.evidence);
     setRoadtestPlan(emptyRoadtestPlan);
     setActiveGate("user");
+    setShowInputValidation(false);
     setActiveStep("intersections");
   }
 
   function goNext() {
+    if (activeStep === "input" && missingInputFields.length > 0) {
+      setShowInputValidation(true);
+      return;
+    }
     const next = steps[Math.min(currentIndex + 1, steps.length - 1)];
     setActiveStep(next.id);
   }
@@ -168,7 +177,12 @@ export default function App() {
               <HomeScreen onStart={() => setActiveStep("input")} calibrationCount={calibrationHistory.length} />
             )}
             {activeStep === "input" && (
-              <ProjectInput project={project} onChange={setProject} assumptions={report.assumptions} />
+              <ProjectInput
+                project={project}
+                onChange={setProject}
+                assumptions={report.assumptions}
+                missingFields={showInputValidation ? missingInputFields : []}
+              />
             )}
             {activeStep === "intersections" && (
               <RealityIntersections

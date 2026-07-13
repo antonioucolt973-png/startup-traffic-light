@@ -330,14 +330,14 @@ button {
 .homeSignalLight.blue { background: #38bdf8; }
 
 .homeLead {
-  max-width: 760px;
+  max-width: none;
 }
 
 .homeLead h3 {
   margin: 0;
-  max-width: 620px;
-  font-size: clamp(38px, 6vw, 68px);
-  line-height: 1.03;
+  max-width: none;
+  font-size: clamp(38px, 4.2vw, 62px);
+  line-height: 1.08;
   letter-spacing: 0;
 }
 
@@ -410,6 +410,16 @@ button {
 }
 
 .homeRule svg { color: #facc15; }
+
+.inputValidation {
+  border: 1px solid rgba(250, 204, 21, 0.5);
+  border-left: 3px solid #facc15;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: rgba(250, 204, 21, 0.08);
+  color: #f8e6a5;
+  line-height: 1.55;
+}
 
 .screenHeader {
   display: flex;
