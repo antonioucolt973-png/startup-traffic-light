@@ -140,6 +140,27 @@ export function RealityIntersections({
 
         <p className="roadtestFeedback">{item.feedback}</p>
       </article>
+
+      <section className="redTeamBoard" aria-label="完整红队质询">
+        <div className="redTeamBoardHead">
+          <div>
+            <p className="microLabel">红队质询</p>
+            <h4>不是要证明你不行，而是把最薄弱的证据说清楚。</h4>
+          </div>
+          <span>每一条都要用真实行动或证据回应</span>
+        </div>
+        <div className="redTeamQuestionGrid">
+          {report.redTeamQuestions.map((question) => (
+            <article key={question.role} className={`redTeamQuestion severity${question.severity}`}>
+              <div>
+                <strong>{question.role}</strong>
+                <em>{question.severity}</em>
+              </div>
+              <p>{question.question}</p>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
