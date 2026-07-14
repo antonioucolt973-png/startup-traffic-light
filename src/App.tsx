@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Backpack, ClipboardCheck, Flag, Map, RotateCcw, Route, Sparkles } from "lucide-react";
 import { EvidenceBackpack } from "./components/EvidenceBackpack";
 import { EvidenceRefill } from "./components/EvidenceRefill";
 import { GateChallenge } from "./components/GateChallenge";
 import { JourneyMapScreen } from "./components/JourneyMapScreen";
+import { JourneyStatusBar } from "./components/JourneyStatusBar";
 import { NextRoute } from "./components/NextRoute";
-import { ProjectCar } from "./components/ProjectCar";
 import { ProjectDeparture } from "./components/ProjectDeparture";
-import { TrafficLight } from "./components/TrafficLight";
 import { AccountMenu } from "./components/AccountMenu";
 import { exampleCases } from "./data/examples";
 import {
@@ -59,6 +58,7 @@ export default function App() {
   const [saveState, setSaveState] = useState("重新校准");
   const [cloudSession, setCloudSession] = useState<CloudSession>({ user: null, enabled: false });
   const [syncState, setSyncState] = useState("本地游客数据");
+  const initialWorkspaceRef = useRef(workspace);
 
   const evidence = useMemo(() => deriveEvidenceSummary(workspace.evidenceRecords), [workspace.evidenceRecords]);
   const roadtestPlan = useMemo(() => plansToRoadtestPlan(workspace.plans), [workspace.plans]);
@@ -74,7 +74,7 @@ export default function App() {
       try {
         const cloudWorkspace = await loadCloudWorkspace(session.user.id);
         if (cloudWorkspace) replaceWorkspace(cloudWorkspace);
-        else await saveCloudWorkspace(session.user.id, workspace);
+        else await saveCloudWorkspace(session.user.id, initialWorkspaceRef.current);
         setSyncState("云端已同步");
       } catch {
         setSyncState("云端同步失败，已保留本地数据");
@@ -85,7 +85,6 @@ export default function App() {
 
   useEffect(() => {
     if (!cloudSession.user) return;
-    setSyncState("正在同步");
     const timer = window.setTimeout(() => {
       void saveCloudWorkspace(cloudSession.user!.id, workspace)
         .then(() => setSyncState("云端已同步"))
@@ -252,6 +251,8 @@ export default function App() {
         </div>
       </header>
 
+      {activeView !== "departure" && <JourneyStatusBar project={workspace.project} report={report} />}
+
       <div className={`journeyWorkspace view-${activeView}`}>
         <section className="journeyMain">
           {activeView === "departure" && (
@@ -333,25 +334,6 @@ export default function App() {
           )}
         </section>
 
-        {activeView !== "departure" && (
-          <aside className="journeySidebar">
-            <TrafficLight light={report.light} label={report.lightLabel} reason={report.lightReason} />
-            <ProjectCar project={workspace.project} compact />
-            <section className="pulsePanel">
-              <div><span>证据充分度</span><strong>{report.evidenceScore}<small>/100</small></strong></div>
-              <div className="pulseMeter"><span style={{ width: `${report.evidenceScore}%` }} /></div>
-            </section>
-            <section className="pulsePanel split">
-              <div><span>路测可信度</span><strong>{report.planCredibility}</strong><small>{report.planScore}/100</small></div>
-              <Backpack size={24} />
-            </section>
-            <section className="pulsePanel">
-              <span>投入上限</span>
-              <div className="investmentPair"><strong>{report.investmentLimit.days}<small>天</small></strong><strong>{report.investmentLimit.money}<small>元</small></strong></div>
-              <ul>{report.investmentLimit.bans.slice(0, 3).map((ban) => <li key={ban}>{ban}</li>)}</ul>
-            </section>
-          </aside>
-        )}
       </div>
     </main>
   );

@@ -80,7 +80,7 @@ export function GateChallenge({
     });
     const round = (gateTurns.length + 1) as 1 | 2;
     onAddTurn({
-      id: `${Date.now()}-${activeGate}-${round}`,
+      id: crypto.randomUUID(),
       projectId: project.id,
       gateId: activeGate,
       round,

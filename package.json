@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "lint": "eslint src api scripts --max-warnings=0",
+    "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
     "verify:p0": "node --experimental-strip-types scripts/verify-p0.ts",
     "preview": "vite preview --host 127.0.0.1"
@@ -19,11 +21,17 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.1",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^10.7.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.7.0",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.64.0",
     "vite": "^6.0.7"
   }
 }

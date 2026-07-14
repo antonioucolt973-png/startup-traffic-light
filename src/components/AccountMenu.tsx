@@ -1,4 +1,4 @@
-import { CloudOff, LogIn, LogOut, Mail, UserRound, X } from "lucide-react";
+import { HardDrive, LogIn, LogOut, Mail, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import type { CloudSession } from "../lib/cloud";
 
@@ -30,8 +30,8 @@ export function AccountMenu({ session, syncState, onRequestSignIn, onSignOut }: 
   return (
     <div className="accountMenu">
       <button className="accountTrigger" type="button" onClick={() => setOpen((value) => !value)}>
-        {session.user ? <UserRound size={16} /> : session.enabled ? <LogIn size={16} /> : <CloudOff size={16} />}
-        <span>{session.user ? "我的项目" : "登录保存"}</span>
+        {session.user ? <UserRound size={16} /> : session.enabled ? <LogIn size={16} /> : <HardDrive size={16} />}
+        <span>{session.user ? "我的项目" : session.enabled ? "登录保存" : "本机已保存"}</span>
       </button>
       {open && (
         <section className="accountPopover">
@@ -50,7 +50,7 @@ export function AccountMenu({ session, syncState, onRequestSignIn, onSignOut }: 
               {status && <span>{status}</span>}
             </>
           ) : (
-            <><p>当前为本地游客模式。配置云端环境变量后即可启用邮箱登录和跨设备同步。</p><span>你的当前体验不会被阻断。</span></>
+            <><p>当前项目会自动保存在这个浏览器中。更换设备、清理浏览器数据后将无法恢复。</p><span>比赛演示阶段不需要登录。</span></>
           )}
         </section>
       )}
