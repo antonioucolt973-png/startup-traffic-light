@@ -15,7 +15,8 @@ import { useMemo, useState } from "react";
 import { requestAiCoach } from "../lib/aiClient";
 import { evidenceTypeLabels, gateLabels, taskStatusLabels } from "../lib/labels";
 import type { AiCoachResponse } from "../lib/aiSchemas";
-import type { CalibrationRound, DecisionReport, Evidence, EvidenceRecord, Project, RedTeamTurn, ValidationTask } from "../types";
+import type { CalibrationRound, DecisionReport, Evidence, EvidenceRecord, Project, RedTeamTurn, SurveyCampaign, ValidationTask } from "../types";
+import { GrowthJourney } from "./GrowthJourney";
 
 interface NextRouteProps {
   report: DecisionReport;
@@ -28,8 +29,11 @@ interface NextRouteProps {
   onCopy: () => void;
   copyState: string;
   onResetTasks: () => void;
+  onReplaceTasks: (tasks: ValidationTask[]) => void;
   onOpenRefill: () => void;
   onOpenRedTeam: () => void;
+  initialProject: Project | null;
+  surveys: SurveyCampaign[];
 }
 
 const evidenceStrength: Record<EvidenceRecord["type"], number> = {
@@ -57,8 +61,11 @@ export function NextRoute({
   onCopy,
   copyState,
   onResetTasks,
+  onReplaceTasks,
   onOpenRefill,
   onOpenRedTeam,
+  initialProject,
+  surveys,
 }: NextRouteProps) {
   const [coach, setCoach] = useState<AiCoachResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -71,7 +78,7 @@ export function NextRoute({
   async function personalizeTasks() {
     setLoading(true);
     const result = await requestAiCoach({
-      mode: "task_personalization",
+      mode: "task_decomposition",
       project: {
         name: project.name,
         description: project.description,
@@ -93,6 +100,16 @@ export function NextRoute({
       },
     });
     setCoach(result);
+    if (result.data.taskDrafts?.length === 7) {
+      onReplaceTasks(result.data.taskDrafts.map((task) => ({
+        id: `${project.id}-ai-day-${task.day}-${Date.now()}`,
+        projectId: project.id,
+        ...task,
+        status: "pending",
+        result: "",
+        evidenceIds: [],
+      })));
+    }
     setLoading(false);
   }
 
@@ -116,6 +133,8 @@ export function NextRoute({
         <div><span>本轮唯一重点</span><strong>{report.currentFocus}</strong><p>{report.nextReviewTrigger}</p></div>
         <button className="primaryButton" type="button" onClick={onOpenRefill}><ClipboardCheck size={16} />开始执行与回填</button>
       </section>
+
+      <GrowthJourney initialProject={initialProject} project={project} report={report} records={records} surveys={surveys} redTeamTurns={redTeamTurns} rounds={rounds} />
 
       <section className={`redTeamCheckpoint ${checkedGateCount > 0 ? "started" : "pending"}`}>
         <div className="redTeamCheckpointIcon"><ShieldAlert size={24} /></div>
@@ -158,10 +177,10 @@ export function NextRoute({
           ))}
         </div>
         <div className="taskCoachRow">
-          <button className="ghostButton" type="button" onClick={personalizeTasks} disabled={loading}>{loading ? <RefreshCw className="spin" size={15} /> : <Bot size={15} />}检查任务是否够具体</button>
+          <button className="ghostButton" type="button" onClick={personalizeTasks} disabled={loading}>{loading ? <RefreshCw className="spin" size={15} /> : <Bot size={15} />}让AI重新拆解7天任务</button>
           <button className="copyButton" type="button" onClick={onCopy}><Copy size={15} />{copyState}</button>
         </div>
-        {coach && <article className={`taskCoachResult source-${coach.source}`}><div><strong>{coach.source === "ai" ? "AI 任务建议" : "规则任务建议"}</strong><span>{coach.source === "ai" ? "模型补充" : "稳定降级"}</span></div><p>{coach.data.summary}</p><ul>{coach.data.suggestions.map((item) => <li key={item}>{item}</li>)}</ul></article>}
+        {coach && <article className={`taskCoachResult source-${coach.source}`}><div><strong>{coach.source === "ai" ? "AI已重排任务" : "规则已重排任务"}</strong><span>{coach.source === "ai" ? "模型生成" : "稳定降级"}</span></div><p>{coach.data.summary}</p><ul>{coach.data.suggestions.map((item) => <li key={item}>{item}</li>)}</ul></article>}
       </section>
 
       <div className="routeBottomGrid">

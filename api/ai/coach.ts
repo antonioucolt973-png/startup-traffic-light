@@ -1,62 +1,5 @@
-import { z } from "zod";
-
-const shortText = z.string().trim().max(1200);
-const aiModeSchema = z.enum(["assumption_breakdown", "plan_review", "red_team_followup", "task_personalization"]);
-const aiCoachRequestSchema = z.object({
-  mode: aiModeSchema,
-  project: z.object({
-    name: shortText,
-    description: shortText,
-    targetUser: shortText,
-    painPoint: shortText,
-    alternative: shortText,
-    acquisition: shortText,
-    monetization: shortText,
-    currentStage: z.enum(["idea", "research", "demo", "mvp", "growth"]),
-    existingArtifact: shortText,
-    biggestUncertainty: shortText,
-  }),
-  evidence: z.object({
-    interviewCount: z.number().min(0).max(100000),
-    activeInterestCount: z.number().min(0).max(100000),
-    trialCount: z.number().min(0).max(100000),
-    paymentCount: z.number().min(0).max(100000),
-    hasRetention: z.boolean(),
-  }),
-  gate: z.object({
-    id: z.enum(["user", "pain", "alternative", "acquisition", "payment", "delivery"]),
-    title: shortText,
-    scene: shortText,
-    currentEvidence: shortText,
-  }).optional(),
-  plan: z.object({
-    audience: shortText,
-    action: shortText,
-    deadline: shortText,
-    passCriteria: shortText,
-    stopCriteria: shortText,
-  }).optional(),
-  previousQuestion: shortText.optional(),
-  answer: shortText.optional(),
-});
-const aiCoachDataSchema = z.object({
-  summary: z.string().trim().min(1).max(600),
-  questions: z.array(z.string().trim().min(1).max(300)).max(3),
-  missingFields: z.array(z.string().trim().min(1).max(80)).max(6),
-  suggestions: z.array(z.string().trim().min(1).max(300)).max(6),
-  revisedAction: z.string().trim().max(600).optional(),
-});
-
-type AiCoachRequest = z.infer<typeof aiCoachRequestSchema>;
-type AiCoachData = z.infer<typeof aiCoachDataSchema>;
-
-const fieldLabels = {
-  audience: "具体对象",
-  action: "现实行动",
-  deadline: "完成时间",
-  passCriteria: "通过标准",
-  stopCriteria: "停止或调整标准",
-} as const;
+import { aiCoachDataSchema, aiCoachRequestSchema, type AiCoachRequest } from "../../src/lib/aiSchemas.ts";
+import { buildFallbackCoachResponse } from "../../src/lib/aiFallback.ts";
 
 interface ApiRequest {
   method?: string;
@@ -78,7 +21,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
 
   const parsed = aiCoachRequestSchema.safeParse(request.body);
   if (!parsed.success) {
-    response.status(400).json({ error: "请求结构不符合 AI 教练契约。" });
+    response.status(400).json({ error: "请求结构不符合AI教练契约。" });
     return;
   }
 
@@ -86,7 +29,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
   const apiKey = process.env.AI_API_KEY;
   const model = process.env.AI_MODEL;
   if (!enabled || !apiKey || !model) {
-    response.status(200).json(buildFallbackCoachResponse(parsed.data, "AI 未启用，当前使用可复现的本地规则建议。"));
+    response.status(200).json(buildFallbackCoachResponse(parsed.data, "AI未启用，当前使用可复现的本地拆解。"));
     return;
   }
 
@@ -105,9 +48,9 @@ export default async function handler(request: ApiRequest, response: ApiResponse
       body: JSON.stringify({
         model,
         temperature: 0.2,
-        max_tokens: 700,
+        max_tokens: parsed.data.mode === "project_intake" ? 1200 : 800,
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: systemPrompt(parsed.data.mode) },
           { role: "user", content: JSON.stringify(parsed.data) },
         ],
       }),
@@ -121,95 +64,28 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     const data = aiCoachDataSchema.parse(JSON.parse(clean));
     response.status(200).json({ schemaVersion: "1.0", mode: parsed.data.mode, source: "ai", data });
   } catch {
-    response.status(200).json(buildFallbackCoachResponse(parsed.data, "模型调用失败，已自动切换本地规则建议。"));
+    response.status(200).json(buildFallbackCoachResponse(parsed.data, "模型调用失败，已自动切换本地拆解。"));
   } finally {
     clearTimeout(timer);
   }
 }
 
-function buildFallbackCoachResponse(request: AiCoachRequest, notice = "当前使用本地规则建议，核心流程不受模型状态影响。") {
-  return {
-    schemaVersion: "1.0" as const,
-    mode: request.mode,
-    source: "fallback" as const,
-    notice,
-    data: buildFallbackData(request),
-  };
+function systemPrompt(mode: AiCoachRequest["mode"]) {
+  const intakeInstruction = mode === "project_intake"
+    ? `当前任务是把用户的一段创业想法拆成 projectDraft。必须输出 name、description、targetUser、painPoint、alternative、acquisition、monetization、currentStage、existingArtifact、biggestUncertainty。信息不足时做保守假设，并把最多3个关键澄清问题放进 questions。`
+    : mode === "route_options"
+      ? "当前任务是生成3条差异明确、低成本、可证伪的 routeOptions。每条必须包含对象、行动、期限、通过和停止标准。"
+      : mode === "survey_generation"
+        ? "当前任务是生成 surveyDraft，包含3至8个问题，只问现实经历、频率、替代方式和行动意愿，禁止询问用户是否喜欢创意。"
+        : mode === "evidence_review"
+          ? "当前任务是根据系统提供的聚合答卷信息生成谨慎的证据候选摘要。必须指出样本限制，禁止把兴趣推断成试用或付费。"
+          : mode === "task_decomposition"
+            ? "当前任务是生成严格7条 taskDrafts，对应第1至第7天。每条任务必须产生外部结果，包含行动、通过和停止标准，不得安排继续开发完整产品。"
+            : "当前任务是拆假设、检查计划、红队追问或优化现实任务。";
+
+  return `你是「OPC创业红绿灯」的AI路线规划员。${intakeInstruction}
+禁止预测创业成功率，禁止把AI推测、计划或市场常识当成现实证据，禁止决定红黄绿蓝灯、投入上限或停止条件。
+你的价值是把简单描述加工成结构化项目、低成本任务和可证伪标准，而不是复述用户输入。
+只输出JSON对象，不要Markdown。结构必须符合：
+{"summary":"不超过600字","questions":["最多3条"],"missingFields":["最多6项"],"suggestions":["最多6条"],"revisedAction":"可选","projectDraft":{"name":"项目名","description":"项目描述","targetUser":"目标用户","painPoint":"痛点","alternative":"替代方案","acquisition":"首批用户来源","monetization":"付费假设","currentStage":"idea|research|demo|mvp|growth","existingArtifact":"已有成果","biggestUncertainty":"最大不确定性"},"routeOptions":[{"title":"路线名","rationale":"理由","audience":"对象","action":"行动","deadline":"期限","passCriteria":"通过标准","stopCriteria":"停止标准"}],"surveyDraft":{"title":"问卷名","introduction":"说明","questions":[{"id":"英文标识","prompt":"问题","type":"single_choice|multiple_choice|short_text|long_text|scale","required":true,"options":[]}]},"taskDrafts":[{"day":1,"title":"任务名","detail":"行动","passCriteria":"通过标准","stopCriteria":"停止标准"}]}`;
 }
-
-function buildFallbackData(request: AiCoachRequest): AiCoachData {
-  if (request.mode === "assumption_breakdown") {
-    return {
-      summary: "项目已经被拆成六类待验证假设。下面内容是验证方向，不是已经成立的事实。",
-      questions: [],
-      missingFields: [],
-      suggestions: [
-        `用户假设：${request.project.targetUser || "谁最频繁遇到这个问题"}`,
-        `痛点假设：${request.project.painPoint || "问题发生频率、损失和现有处理成本"}`,
-        `替代假设：${request.project.alternative || "用户当前为什么不会继续使用旧方法"}`,
-        `获客假设：${request.project.acquisition || "第一批具体用户从哪里找到"}`,
-        `付费假设：${request.project.monetization || "谁会为哪个结果付钱"}`,
-        `交付假设：${request.project.existingArtifact || "一人七天内能展示的最小价值"}`,
-      ],
-    };
-  }
-
-  const plan = request.plan;
-  const missingFields = plan
-    ? (Object.entries(fieldLabels) as Array<[keyof typeof fieldLabels, string]>)
-      .filter(([key]) => !plan[key].trim())
-      .map(([, label]) => label)
-    : Object.values(fieldLabels);
-
-  if (request.mode === "plan_review") {
-    return {
-      summary: missingFields.length === 0
-        ? "方案已经包含对象、行动、期限和判定门槛，可以进入低成本路测，但仍不能当作现实证据。"
-        : `方案还缺少 ${missingFields.join("、")}，当前不能判断它是否真的可执行。`,
-      questions: missingFields.slice(0, 2).map((field) => `请补充${field}，并写成明天可以直接执行的内容。`),
-      missingFields,
-      suggestions: buildPlanSuggestions(request),
-    };
-  }
-
-  if (request.mode === "red_team_followup") {
-    return {
-      summary: request.answer?.trim()
-        ? "已收到你的回答。红队只检查这段回答是否让方案更具体，不会替你编造用户证据。"
-        : "先回答最关键的缺口，再决定是否修改方案。",
-      questions: buildFollowupQuestions(request, missingFields),
-      missingFields,
-      suggestions: buildPlanSuggestions(request).slice(0, 2),
-    };
-  }
-
-  return {
-    summary: "任务已按当前灯号和最薄弱证据拆成低成本现实行动。",
-    questions: [],
-    missingFields,
-    suggestions: buildPlanSuggestions(request),
-  };
-}
-
-function buildPlanSuggestions(request: AiCoachRequest): string[] {
-  const user = request.project.targetUser || "目标用户";
-  const gate = request.gate?.title || "当前路口";
-  return [
-    `围绕${gate}，先列出 5 个可以在 48 小时内联系到的${user}。`,
-    "行动必须产生访谈、试用、报价、付款或明确拒绝中的至少一种结果。",
-    "提前写清楚通过门槛和停止门槛，避免得到模糊反馈后继续自我解释。",
-  ];
-}
-
-function buildFollowupQuestions(request: AiCoachRequest, missingFields: string[]): string[] {
-  if (missingFields.length > 0) return missingFields.slice(0, 2).map((field) => `${field}仍然不清楚，你准备怎么补上？`);
-  if (!request.answer?.trim()) return [request.gate?.currentEvidence ? `这条方案如何补上「${request.gate.currentEvidence}」所暴露的缺口？` : "这项行动具体会产生什么可复核结果？"];
-  if (!/\d|一|二|三|四|五|六|七|八|九|十/.test(request.answer)) return ["你的回答没有数量门槛。要联系几个人，出现多少次行为才算通过？"];
-  if (!/停止|调整|放弃|少于|低于/.test(request.answer)) return ["如果结果不理想，你会在什么数字出现时停止或调整？"];
-  return ["最后确认：完成后你会记录哪条真实行为，而不是只记录自己的感受？"];
-}
-
-const systemPrompt = `你是创业红绿灯的结构化教练。你只帮助用户拆假设、检查计划、进行红队追问和优化行动任务。
-禁止预测创业成功率，禁止把计划、AI 推测或市场常识当成用户证据，禁止直接决定红黄绿蓝灯、投入上限或停止条件。
-只输出 JSON 对象，不要 Markdown，不要解释。结构必须是：
-{"summary":"不超过200字","questions":["最多3条"],"missingFields":["最多6项"],"suggestions":["最多6条"],"revisedAction":"可选，不超过300字"}`;

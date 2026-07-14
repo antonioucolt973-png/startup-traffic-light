@@ -69,6 +69,35 @@ export interface EvidenceRecord {
   note: string;
   url: string;
   verifiable: boolean;
+  reviewStatus: "pending" | "confirmed" | "rejected";
+  origin: "manual" | "survey" | "task" | "legacy";
+  rawRecordIds: string[];
+}
+
+export interface SurveyQuestion {
+  id: string;
+  prompt: string;
+  type: "single_choice" | "multiple_choice" | "short_text" | "long_text" | "scale";
+  required: boolean;
+  options: string[];
+}
+
+export interface SurveyDraft {
+  title: string;
+  introduction: string;
+  questions: SurveyQuestion[];
+}
+
+export interface SurveyCampaign {
+  id: string;
+  projectId: string;
+  gateId: GateId;
+  slug: string;
+  draft: SurveyDraft;
+  status: "draft" | "published" | "closed";
+  responseCount: number;
+  createdAt: string;
+  publishedAt?: string;
 }
 
 export interface CalibrationSnapshot {
@@ -199,13 +228,15 @@ export interface CalibrationDiff {
 }
 
 export interface ProjectWorkspace {
-  schemaVersion: 2;
+  schemaVersion: 4;
   project: Project;
+  initialProject: Project | null;
   evidenceRecords: EvidenceRecord[];
   plans: GatePlans;
   redTeamTurns: RedTeamTurn[];
   tasks: ValidationTask[];
   rounds: CalibrationRound[];
+  surveys: SurveyCampaign[];
 }
 
 export interface DecisionReport {

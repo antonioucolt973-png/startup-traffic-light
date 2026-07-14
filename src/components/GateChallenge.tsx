@@ -1,9 +1,10 @@
-import { ArrowRight, Bot, CheckCircle2, ClipboardPen, MessageSquareReply, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowRight, Bot, CheckCircle2, ClipboardPen, Map, MessageSquareReply, RefreshCw, ShieldAlert, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { requestAiCoach } from "../lib/aiClient";
 import type { AiCoachResponse } from "../lib/aiSchemas";
-import type { DecisionReport, Evidence, GateActionPlan, GateId, Project, RedTeamTurn } from "../types";
+import type { DecisionReport, Evidence, EvidenceRecord, GateActionPlan, GateId, Project, RedTeamTurn, SurveyCampaign } from "../types";
 import { RoadMap } from "./RoadMap";
+import { SurveyWorkshop } from "./SurveyWorkshop";
 
 interface GateChallengeProps {
   project: Project;
@@ -16,6 +17,10 @@ interface GateChallengeProps {
   turns: RedTeamTurn[];
   onAddTurn: (turn: RedTeamTurn) => void;
   onOpenBackpack: () => void;
+  userId?: string;
+  surveys: SurveyCampaign[];
+  onSaveSurvey: (survey: SurveyCampaign) => void;
+  onAddEvidence: (record: EvidenceRecord) => void;
 }
 
 const planFields: Array<{ key: keyof GateActionPlan; label: string; placeholder: string }> = [
@@ -37,10 +42,16 @@ export function GateChallenge({
   turns,
   onAddTurn,
   onOpenBackpack,
+  userId,
+  surveys,
+  onSaveSurvey,
+  onAddEvidence,
 }: GateChallengeProps) {
   const [review, setReview] = useState<AiCoachResponse | null>(null);
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState<"review" | "redteam" | null>(null);
+  const [routeOptions, setRouteOptions] = useState<NonNullable<AiCoachResponse["data"]["routeOptions"]>>([]);
+  const [routeLoading, setRouteLoading] = useState(false);
   const gate = report.roadtestChecks.find((item) => item.id === activeGate) ?? report.roadtestChecks[0];
   const gateTurns = useMemo(() => turns.filter((turn) => turn.gateId === activeGate).slice(-2), [turns, activeGate]);
   const latestTurn = gateTurns[gateTurns.length - 1];
@@ -84,7 +95,25 @@ export function GateChallenge({
     setLoading(null);
   }
 
-  function buildRequest(mode: "plan_review" | "red_team_followup") {
+  async function generateRoutes() {
+    setRouteLoading(true);
+    const result = await requestAiCoach(buildRequest("route_options"));
+    setRouteOptions(result.data.routeOptions ?? []);
+    setRouteLoading(false);
+  }
+
+  function chooseRoute(option: NonNullable<AiCoachResponse["data"]["routeOptions"]>[number]) {
+    onPlanChange({
+      audience: option.audience,
+      action: option.action,
+      deadline: option.deadline,
+      passCriteria: option.passCriteria,
+      stopCriteria: option.stopCriteria,
+    });
+    setReview(null);
+  }
+
+  function buildRequest(mode: "plan_review" | "red_team_followup" | "route_options") {
     return {
       mode,
       project: {
@@ -124,6 +153,24 @@ export function GateChallenge({
         <div className="gateSceneVisual"><ShieldAlert size={30} /><span>{gate.stage === "demand" ? "需求关" : gate.stage === "transaction" ? "交易关" : "交付关"}</span></div>
         <div><span>现实会怎么拦你</span><h2>{gate.title}</h2><p>{gate.scene}</p></div>
         <div className="gateStatusBox"><span>当前路况</span><strong>{gate.status}</strong><p>{gate.evidence}</p></div>
+      </section>
+
+      <section className="aiRoutePlanner">
+        <div className="aiRouteIntro"><Map size={22} /><div><strong>让AI先拆三条可走路线</strong><p>根据当前路口、已有证据和一人公司的资源限制生成。你仍然可以改写或完全自定义。</p></div></div>
+        <button className="routeGenerateButton" type="button" onClick={generateRoutes} disabled={routeLoading}>
+          {routeLoading ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />}{routeOptions.length ? "重新生成路线" : "生成3条行动路线"}
+        </button>
+        {routeOptions.length > 0 && (
+          <div className="routeOptionGrid">
+            {routeOptions.map((option, index) => (
+              <article key={option.title}>
+                <span>路线 {index + 1}</span><h3>{option.title}</h3><p>{option.rationale}</p>
+                <dl><div><dt>行动</dt><dd>{option.action}</dd></div><div><dt>通过</dt><dd>{option.passCriteria}</dd></div></dl>
+                <button type="button" onClick={() => chooseRoute(option)}>选择这条路线<ArrowRight size={15} /></button>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="gateWorkbench">
@@ -167,6 +214,7 @@ export function GateChallenge({
           )}
         </section>
       </div>
+      <SurveyWorkshop project={project} gateId={activeGate} gateTitle={gate.title} evidence={evidence} userId={userId} campaigns={surveys} onSaveCampaign={onSaveSurvey} onAddEvidence={onAddEvidence} />
     </div>
   );
 }

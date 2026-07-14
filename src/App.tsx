@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Backpack, ClipboardCheck, Flag, Map, RotateCcw, Route, Sparkles } from "lucide-react";
 import { EvidenceBackpack } from "./components/EvidenceBackpack";
 import { EvidenceRefill } from "./components/EvidenceRefill";
@@ -8,6 +8,7 @@ import { NextRoute } from "./components/NextRoute";
 import { ProjectCar } from "./components/ProjectCar";
 import { ProjectDeparture } from "./components/ProjectDeparture";
 import { TrafficLight } from "./components/TrafficLight";
+import { AccountMenu } from "./components/AccountMenu";
 import { exampleCases } from "./data/examples";
 import {
   buildReport,
@@ -24,6 +25,15 @@ import {
   loadWorkspace,
   saveWorkspace,
 } from "./lib/storage";
+import {
+  getCloudSession,
+  loadCloudWorkspace,
+  requestEmailSignIn,
+  saveCloudWorkspace,
+  signOutCloud,
+  subscribeToCloudSession,
+  type CloudSession,
+} from "./lib/cloud";
 import type {
   GateId,
   Project,
@@ -47,6 +57,8 @@ export default function App() {
   const [activeGate, setActiveGate] = useState<GateId>("user");
   const [copyState, setCopyState] = useState("复制报告");
   const [saveState, setSaveState] = useState("重新校准");
+  const [cloudSession, setCloudSession] = useState<CloudSession>({ user: null, enabled: false });
+  const [syncState, setSyncState] = useState("本地游客数据");
 
   const evidence = useMemo(() => deriveEvidenceSummary(workspace.evidenceRecords), [workspace.evidenceRecords]);
   const roadtestPlan = useMemo(() => plansToRoadtestPlan(workspace.plans), [workspace.plans]);
@@ -54,6 +66,33 @@ export default function App() {
     () => buildReport(workspace.project, evidence, roadtestPlan),
     [workspace.project, evidence, roadtestPlan],
   );
+
+  useEffect(() => {
+    void getCloudSession().then(async (session) => {
+      setCloudSession(session);
+      if (!session.user) return;
+      try {
+        const cloudWorkspace = await loadCloudWorkspace(session.user.id);
+        if (cloudWorkspace) replaceWorkspace(cloudWorkspace);
+        else await saveCloudWorkspace(session.user.id, workspace);
+        setSyncState("云端已同步");
+      } catch {
+        setSyncState("云端同步失败，已保留本地数据");
+      }
+    });
+    return subscribeToCloudSession(setCloudSession);
+  }, []);
+
+  useEffect(() => {
+    if (!cloudSession.user) return;
+    setSyncState("正在同步");
+    const timer = window.setTimeout(() => {
+      void saveCloudWorkspace(cloudSession.user!.id, workspace)
+        .then(() => setSyncState("云端已同步"))
+        .catch(() => setSyncState("云端同步失败，已保留本地数据"));
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [cloudSession.user, workspace]);
   function navigate(view: ViewId) {
     if (view === "route" || view === "refill") {
       updateWorkspace((current) => ensureExecutionState(current));
@@ -85,9 +124,20 @@ export default function App() {
     }));
   }
 
+  function confirmProject(project: Project) {
+    const normalized = normalizeProject(project);
+    updateWorkspace((current) => ({
+      ...current,
+      project: normalized,
+      initialProject: current.initialProject ?? normalized,
+      tasks: projectInputsChanged(current.project, normalized) ? [] : current.tasks,
+    }));
+  }
+
   function loadExample(index: number) {
     const example = exampleCases[index];
     const next = createEmptyWorkspace(example.project);
+    next.initialProject = example.project;
     next.evidenceRecords = evidenceSummaryToRecords(example.project.id, example.evidence);
     next.plans = normalizeGatePlans(emptyGatePlans);
     replaceWorkspace(next);
@@ -106,6 +156,20 @@ export default function App() {
 
   function addEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
     updateWorkspace((current) => ({ ...current, evidenceRecords: [record, ...current.evidenceRecords] }));
+  }
+
+  function saveSurvey(survey: ProjectWorkspace["surveys"][number]) {
+    updateWorkspace((current) => ({
+      ...current,
+      surveys: [survey, ...current.surveys.filter((item) => item.id !== survey.id && !(item.gateId === survey.gateId && item.status === "published"))],
+    }));
+  }
+
+  function updateEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
+    updateWorkspace((current) => ({
+      ...current,
+      evidenceRecords: current.evidenceRecords.map((item) => item.id === record.id ? record : item),
+    }));
   }
 
   function removeEvidenceRecord(recordId: string) {
@@ -129,6 +193,10 @@ export default function App() {
       const currentReport = buildWorkspaceReport(current);
       return { ...current, tasks: createValidationTasks(current.project.id, currentReport) };
     });
+  }
+
+  function replaceTasks(tasks: ProjectWorkspace["tasks"]) {
+    updateWorkspace((current) => ({ ...current, tasks }));
   }
 
   async function copyReport() {
@@ -159,7 +227,7 @@ export default function App() {
       <header className="journeyHeader">
         <button className="journeyBrand" type="button" onClick={() => navigate("departure")}>
           <span className="brandSignal" aria-hidden="true"><i /><i /><i /></span>
-          <span><strong>创业红绿灯</strong><small>用证据校准创业节奏</small></span>
+          <span><strong>OPC创业红绿灯</strong><small>AI验证陪跑系统</small></span>
         </button>
         <nav className="journeyNav" aria-label="创业校准流程">
           {views.map((view, index) => {
@@ -171,9 +239,17 @@ export default function App() {
             );
           })}
         </nav>
-        <button className="headerProject" type="button" onClick={() => navigate("departure")}>
-          <Sparkles size={15} /><span>{workspace.project.name || "未命名项目"}</span>
-        </button>
+        <div className="headerUtilities">
+          <button className="headerProject" type="button" onClick={() => navigate("departure")}>
+            <Sparkles size={15} /><span>{workspace.project.name || "未命名项目"}</span>
+          </button>
+          <AccountMenu
+            session={cloudSession}
+            syncState={syncState}
+            onRequestSignIn={requestEmailSignIn}
+            onSignOut={signOutCloud}
+          />
+        </div>
       </header>
 
       <div className={`journeyWorkspace view-${activeView}`}>
@@ -182,6 +258,7 @@ export default function App() {
             <ProjectDeparture
               project={workspace.project}
               onChange={setProject}
+              onConfirm={confirmProject}
               examples={exampleCases}
               onLoadExample={loadExample}
               onReady={() => navigate("map")}
@@ -208,6 +285,10 @@ export default function App() {
               turns={workspace.redTeamTurns}
               onAddTurn={addRedTeamTurn}
               onOpenBackpack={() => navigate("backpack")}
+              userId={cloudSession.user?.id}
+              surveys={workspace.surveys}
+              onSaveSurvey={saveSurvey}
+              onAddEvidence={addEvidenceRecord}
             />
           )}
           {activeView === "backpack" && (
@@ -216,6 +297,7 @@ export default function App() {
               records={workspace.evidenceRecords}
               onAdd={addEvidenceRecord}
               onRemove={removeEvidenceRecord}
+              onUpdate={updateEvidenceRecord}
             />
           )}
           {activeView === "route" && (
@@ -230,8 +312,11 @@ export default function App() {
               onCopy={copyReport}
               copyState={copyState}
               onResetTasks={resetTasks}
+              onReplaceTasks={replaceTasks}
               onOpenRefill={() => navigate("refill")}
               onOpenRedTeam={() => navigate("gate")}
+              initialProject={workspace.initialProject}
+              surveys={workspace.surveys}
             />
           )}
           {activeView === "refill" && (
@@ -290,7 +375,7 @@ function buildWorkspaceReport(workspace: ProjectWorkspace) {
 }
 
 function ensureWorkspaceVersion(workspace: ProjectWorkspace): ProjectWorkspace {
-  return { ...workspace, schemaVersion: 2 };
+  return { ...workspace, schemaVersion: 4 };
 }
 
 function projectInputsChanged(previous: Project, current: Project) {

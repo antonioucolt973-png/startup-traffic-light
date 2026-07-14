@@ -25,24 +25,34 @@ const PROJECT_KEY = "startup-traffic-light:project";
 const EVIDENCE_KEY = "startup-traffic-light:evidence";
 const ROADTEST_PLAN_KEY = "startup-traffic-light:roadtest-plan";
 const CALIBRATION_HISTORY_KEY = "startup-traffic-light:calibration-history";
-const WORKSPACE_KEY = "startup-traffic-light:workspace:v2";
+const WORKSPACE_KEY = "startup-traffic-light:workspace:v4";
+const PREVIOUS_WORKSPACE_KEYS = ["startup-traffic-light:workspace:v3", "startup-traffic-light:workspace:v2"];
 
 export function createEmptyWorkspace(project: Project = emptyProject): ProjectWorkspace {
   return {
-    schemaVersion: 2,
+    schemaVersion: 4,
     project: normalizeProject(project),
+    initialProject: null,
     evidenceRecords: [],
     plans: normalizeGatePlans(emptyGatePlans),
     redTeamTurns: [],
     tasks: [],
     rounds: [],
+    surveys: [],
   };
 }
 
 export function loadWorkspace(): ProjectWorkspace {
   const saved = readJson<unknown>(WORKSPACE_KEY);
-  if (saved && typeof saved === "object" && (saved as Partial<ProjectWorkspace>).schemaVersion === 2) {
+  if (saved && typeof saved === "object" && (saved as Partial<ProjectWorkspace>).schemaVersion === 4) {
     return normalizeWorkspace(saved as Partial<ProjectWorkspace>);
+  }
+
+  const previous = PREVIOUS_WORKSPACE_KEYS.map((key) => readJson<unknown>(key)).find(Boolean);
+  if (previous && typeof previous === "object") {
+    const migrated = normalizeWorkspace(previous as Partial<ProjectWorkspace>);
+    saveWorkspace(migrated);
+    return migrated;
   }
 
   const migrated = migrateLegacyWorkspace();
@@ -96,23 +106,26 @@ function migrateLegacyWorkspace(): ProjectWorkspace {
   const now = new Date().toISOString();
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 4,
     project,
+    initialProject: project.name || project.description ? project : null,
     evidenceRecords: evidenceSummaryToRecords(project.id, evidence, now),
     plans: legacyPlanToGatePlans(plan),
     redTeamTurns: [],
     tasks: [],
     rounds: history.map((snapshot) => snapshotToRound(snapshot)),
+    surveys: [],
   };
 }
 
 function normalizeWorkspace(workspace: Partial<ProjectWorkspace>): ProjectWorkspace {
   const project = normalizeProject(workspace.project ?? emptyProject);
   return {
-    schemaVersion: 2,
+    schemaVersion: 4,
     project,
+    initialProject: workspace.initialProject ? normalizeProject(workspace.initialProject) : null,
     evidenceRecords: Array.isArray(workspace.evidenceRecords)
-      ? workspace.evidenceRecords.filter(isEvidenceRecord).map((record) => ({ ...record, projectId: project.id }))
+      ? workspace.evidenceRecords.filter(isEvidenceRecord).map((record) => normalizeEvidenceRecord(record, project.id))
       : [],
     plans: normalizeGatePlans(workspace.plans),
     redTeamTurns: Array.isArray(workspace.redTeamTurns)
@@ -124,6 +137,7 @@ function normalizeWorkspace(workspace: Partial<ProjectWorkspace>): ProjectWorksp
     rounds: Array.isArray(workspace.rounds)
       ? workspace.rounds.filter(isCalibrationRound).map((round) => normalizeCalibrationRound(round, project)).slice(0, 12)
       : [],
+    surveys: Array.isArray(workspace.surveys) ? workspace.surveys.filter((survey) => survey && typeof survey.id === "string") : [],
   };
 }
 
@@ -154,6 +168,9 @@ export function evidenceSummaryToRecords(projectId: string, evidence: Evidence, 
       note: "由旧版汇总数据迁移，建议补充原始记录。",
       url: "",
       verifiable: false,
+      reviewStatus: "confirmed",
+      origin: "legacy",
+      rawRecordIds: [],
     });
   };
 
@@ -166,6 +183,16 @@ export function evidenceSummaryToRecords(projectId: string, evidence: Evidence, 
   add("payment", evidence.paymentSignalCount, "报价接受、预订或付款信号");
   add("repeat", evidence.retentionSignal ? 1 : 0, "复用、留存或转介绍信号");
   return records;
+}
+
+function normalizeEvidenceRecord(record: EvidenceRecord, projectId: string): EvidenceRecord {
+  return {
+    ...record,
+    projectId,
+    reviewStatus: record.reviewStatus === "pending" || record.reviewStatus === "rejected" ? record.reviewStatus : "confirmed",
+    origin: record.origin === "survey" || record.origin === "task" || record.origin === "manual" ? record.origin : "legacy",
+    rawRecordIds: Array.isArray(record.rawRecordIds) ? record.rawRecordIds.filter((id): id is string => typeof id === "string") : [],
+  };
 }
 
 function snapshotToRound(snapshot: CalibrationSnapshot): CalibrationRound {

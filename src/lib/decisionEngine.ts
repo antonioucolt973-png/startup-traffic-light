@@ -150,7 +150,7 @@ export function plansToRoadtestPlan(plans: GatePlans): RoadtestPlan {
 
 export function deriveEvidenceSummary(records: EvidenceRecord[]): Evidence {
   const eligibleRecords = records.filter(
-    (record) => record.source !== "ai_inference" && record.source !== "founder_assumption",
+    (record) => record.reviewStatus !== "pending" && record.reviewStatus !== "rejected" && record.source !== "ai_inference" && record.source !== "founder_assumption",
   );
   const total = (type: EvidenceRecord["type"]) =>
     eligibleRecords.filter((record) => record.type === type).reduce((sum, record) => sum + Math.max(0, record.quantity), 0);

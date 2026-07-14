@@ -1,4 +1,4 @@
-import { Backpack, CalendarDays, Link2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Backpack, CalendarDays, Check, Edit3, Link2, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { evidenceSourceLabels, evidenceTypeLabels } from "../lib/labels";
 import type { EvidenceRecord, EvidenceSource, EvidenceType, Project } from "../types";
@@ -8,11 +8,12 @@ interface EvidenceBackpackProps {
   records: EvidenceRecord[];
   onAdd: (record: EvidenceRecord) => void;
   onRemove: (recordId: string) => void;
+  onUpdate: (record: EvidenceRecord) => void;
 }
 
 const defaultSource: EvidenceSource = "user_behavior";
 
-export function EvidenceBackpack({ project, records, onAdd, onRemove }: EvidenceBackpackProps) {
+export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }: EvidenceBackpackProps) {
   const [type, setType] = useState<EvidenceType>("interview");
   const [occurredAt, setOccurredAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [actor, setActor] = useState("");
@@ -23,6 +24,9 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove }: Evidence
   const [url, setUrl] = useState("");
   const [verifiable, setVerifiable] = useState(false);
   const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingBehavior, setEditingBehavior] = useState("");
+  const [editingNote, setEditingNote] = useState("");
 
   const sortedRecords = useMemo(
     () => [...records].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
@@ -46,6 +50,9 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove }: Evidence
       note: note.trim(),
       url: url.trim(),
       verifiable,
+      reviewStatus: "confirmed",
+      origin: "manual",
+      rawRecordIds: [],
     });
     setBehavior("");
     setActor("");
@@ -54,6 +61,18 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove }: Evidence
     setQuantity(1);
     setVerifiable(false);
     setError("");
+  }
+
+  function beginEdit(record: EvidenceRecord) {
+    setEditingId(record.id);
+    setEditingBehavior(record.behavior);
+    setEditingNote(record.note);
+  }
+
+  function saveEdit(record: EvidenceRecord) {
+    if (!editingBehavior.trim()) return;
+    onUpdate({ ...record, behavior: editingBehavior.trim(), note: editingNote.trim() });
+    setEditingId(null);
   }
 
   return (
@@ -87,9 +106,9 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove }: Evidence
         ) : (
           <div className="evidenceRecordList">
             {sortedRecords.map((record) => (
-              <article key={record.id} className={`evidenceRecord source-${record.source}`}>
-                <div className="evidenceRecordHead"><span>{evidenceTypeLabels[record.type]}</span><button type="button" onClick={() => onRemove(record.id)} aria-label={`删除${evidenceTypeLabels[record.type]}`}><Trash2 size={15} /></button></div>
-                <strong>{record.behavior}</strong>
+              <article key={record.id} className={`evidenceRecord source-${record.source} review-${record.reviewStatus}`}>
+                <div className="evidenceRecordHead"><span>{evidenceTypeLabels[record.type]}</span><div className="recordHeadActions"><em>{record.reviewStatus === "pending" ? "待确认" : record.reviewStatus === "rejected" ? "已排除" : record.origin === "survey" ? "问卷已确认" : "已确认"}</em><button type="button" onClick={() => beginEdit(record)} aria-label={`编辑${evidenceTypeLabels[record.type]}`}><Edit3 size={15} /></button><button type="button" onClick={() => onRemove(record.id)} aria-label={`删除${evidenceTypeLabels[record.type]}`}><Trash2 size={15} /></button></div></div>
+                {editingId === record.id ? <div className="evidenceInlineEdit"><textarea value={editingBehavior} onChange={(event) => setEditingBehavior(event.target.value)} /><input value={editingNote} onChange={(event) => setEditingNote(event.target.value)} placeholder="备注" /><div><button type="button" onClick={() => setEditingId(null)}>取消</button><button className="confirm" type="button" onClick={() => saveEdit(record)}>保存修改</button></div></div> : <strong>{record.behavior}</strong>}
                 <div className="evidenceMeta">
                   <span><CalendarDays size={13} />{record.occurredAt}</span>
                   <span>{record.actor}</span>
@@ -98,6 +117,7 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove }: Evidence
                   {record.url && <a href={record.url} target="_blank" rel="noreferrer"><Link2 size={13} />查看链接</a>}
                 </div>
                 <footer><span>{evidenceSourceLabels[record.source]}</span>{record.note && <p>{record.note}</p>}</footer>
+                {record.reviewStatus === "pending" && <div className="evidenceReviewActions"><p>确认代表AI总结与原始答卷一致，不代表第三方已经证明内容绝对真实。</p><button type="button" onClick={() => onUpdate({ ...record, reviewStatus: "rejected" })}><X size={14} />排除</button><button className="confirm" type="button" onClick={() => onUpdate({ ...record, reviewStatus: "confirmed" })}><Check size={14} />确认计入</button></div>}
               </article>
             ))}
           </div>
