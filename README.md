@@ -24,3 +24,14 @@ npm run build
 - `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`：邮箱登录、云端项目和公开问卷。
 
 未配置AI时自动使用本地规则拆解；未配置Supabase时保持本地游客模式。真实问卷发布需要先执行 `supabase/migrations/001_initial.sql`。
+
+## 启用登录与真实问卷
+
+1. 创建一个Supabase项目，在SQL编辑器执行 `supabase/migrations/001_initial.sql`。
+2. 在Supabase认证设置中，将线上域名加入允许的重定向地址。
+3. 在Vercel项目环境变量中配置：
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. 重新部署后，首页“登录保存”会显示邮箱验证码输入；登录用户可以发布公开问卷和二维码。
+
+不要把Supabase `service_role`、AI Key或其他私密密钥写入前端环境变量。公开问卷只使用受RLS限制的匿名公钥。
