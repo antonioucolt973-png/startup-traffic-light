@@ -124,12 +124,12 @@ export default function App() {
     }));
   }
 
-  function confirmProject(project: Project) {
+  function confirmProject(project: Project, initialProject: Project) {
     const normalized = normalizeProject(project);
     updateWorkspace((current) => ({
       ...current,
       project: normalized,
-      initialProject: current.initialProject ?? normalized,
+      initialProject: normalizeProject(initialProject),
       tasks: projectInputsChanged(current.project, normalized) ? [] : current.tasks,
     }));
   }

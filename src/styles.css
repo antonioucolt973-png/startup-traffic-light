@@ -1109,3 +1109,38 @@ h1, h2, h3, h4, p { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* Brighter expedition surfaces; risk checkpoints keep their darker contrast. */
+.mapScreen, .nextRouteScreen, .evidenceBackpackScreen, .evidenceRefillScreen { color: #17221d; }
+.mapHeader, .backpackHeader, .routePassHeader, .refillHeader { border-color: #cfdbd4; background: #ffffff; }
+.mapHeader > div > p, .backpackHeader p, .routePassHeader p, .refillHeader p { color: #5f7067; }
+.journeyStage, .evidenceComposer, .evidenceTimeline, .taskRouteBoard, .routeDecisionCard, .stopBoard, .gateLedger, .roundLedger, .growthJourney { border-color: #cbd8d1; background: #ffffff; }
+.journeyStage::before { border-color: #ffffff; }
+.journeyStageIntro strong, .timelineHeading h2, .taskRouteHeading h2, .growthJourney h2 { color: #18251e; }
+.journeyStageIntro p, .timelineHeading > span, .taskRouteHeading p { color: #697970; }
+.journeyGate { border-color: #d1ddd6; background: #f5f9f6; color: #24352c; }
+.journeyGate small { color: #66776e; }
+.journeyGate:hover, .journeyGate.active { background: #eafff2; }
+.trafficPanel, .pulsePanel { background: #ffffff; color: #17221d; }
+.trafficBody, .investmentPair strong { background: #eef4f0; }
+.signal { background: #cdd8d2; }
+.trafficPanel > p, .pulsePanel li { color: #617169; }
+.pulseMeter { background: #dce7e1; }
+.routeFocusBand { background: #e9f8ef; color: #17221d; }
+.routeFocusBand p { color: #50675a; }
+.redTeamCheckpoint { background: #fff8dc; color: #272410; border-color: #e7d470; }
+.redTeamCheckpoint p { color: #6b6442; }
+.routeDecisionCard > span, .routeDecisionCard p, .stopBoard li, .gateLedger em, .roundLedger p { color: #63736b; }
+.routeDecisionCard strong, .stopBoard strong, .gateLedger strong, .roundLedger strong { color: #1a2821; }
+.taskRouteItem { border-color: #d5e0da; background: #f7faf8; color: #17221d; }
+.taskRouteItem p { color: #66776e; }
+.growthJourney { background: #f2fbf6; }
+.growthPulse, .beforeAfterLane article, .growthMetrics > div, .projectChangeLog { background: #ffffff; border: 1px solid #d4e0d9; }
+.growthPulse strong, .beforeAfterLane h3, .growthMetrics strong { color: #17221d; }
+.growthPulse span, .beforeAfterLane p, .beforeAfterLane dd, .growthMetrics span { color: #5f7067; }
+.projectChangeLog > strong { color: #24362c; }
+.evidenceComposerGrid input, .evidenceComposerGrid textarea, .evidenceComposerGrid select, .evidenceInlineEdit textarea, .evidenceInlineEdit input { border-color: #c4d1ca; background: #f8fbf9; color: #17221d; }
+.evidenceRecord { border-color: #d1ddd6; background: #f8fbf9; color: #17221d; }
+.evidenceRecord strong { color: #17221d; }
+.evidenceRecord footer p, .evidenceMeta { color: #65766d; }
+.evidenceEmpty { color: #5f7067; }

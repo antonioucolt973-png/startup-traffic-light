@@ -25,7 +25,7 @@ import type { Project } from "../types";
 interface ProjectDepartureProps {
   project: Project;
   onChange: (project: Project) => void;
-  onConfirm: (project: Project) => void;
+  onConfirm: (project: Project, initialProject: Project) => void;
   examples: ExampleCase[];
   onLoadExample: (index: number) => void;
   onReady: () => void;
@@ -160,10 +160,24 @@ export function ProjectDeparture({
     const nextProject: Project = {
       ...project,
       ...draft,
+      id: project.description.trim() === idea.trim() && project.id ? project.id : crypto.randomUUID(),
       hasDemo: draft.currentStage === "demo" || draft.currentStage === "mvp" || draft.currentStage === "growth",
     };
+    const initialProject: Project = {
+      ...project,
+      id: nextProject.id,
+      name: "最初的一句话想法",
+      description: idea.trim(),
+      targetUser: "",
+      painPoint: "",
+      alternative: "",
+      acquisition: "",
+      monetization: "",
+      biggestUncertainty: "",
+      existingArtifact: "",
+    };
     onChange(nextProject);
-    onConfirm(nextProject);
+    onConfirm(nextProject, initialProject);
     setPhase("packing");
   }
 

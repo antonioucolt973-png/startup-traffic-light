@@ -332,4 +332,17 @@ assert.equal(intakeFallback.mode, "project_intake");
 assert.ok(intakeFallback.data.projectDraft?.targetUser);
 assert.ok(intakeFallback.data.projectDraft?.biggestUncertainty);
 
+const routeRequest = aiCoachRequestSchema.parse({ ...aiRequest, mode: "route_options" });
+assert.equal(buildFallbackCoachResponse(routeRequest).data.routeOptions?.length, 3);
+const surveyRequest = aiCoachRequestSchema.parse({ ...aiRequest, mode: "survey_generation" });
+assert.ok((buildFallbackCoachResponse(surveyRequest).data.surveyDraft?.questions.length ?? 0) >= 3);
+const taskRequest = aiCoachRequestSchema.parse({ ...aiRequest, mode: "task_decomposition" });
+assert.equal(buildFallbackCoachResponse(taskRequest).data.taskDrafts?.length, 7);
+
+const pendingEvidence = evidenceSummaryToRecords("pending-test", { ...emptyEvidence, interviewCount: 3 });
+pendingEvidence[0].reviewStatus = "pending";
+assert.equal(deriveEvidenceSummary(pendingEvidence).interviewCount, 0);
+pendingEvidence[0].reviewStatus = "confirmed";
+assert.equal(deriveEvidenceSummary(pendingEvidence).interviewCount, 3);
+
 console.log("P0 verification passed: AI intake, four lights, structured plans, evidence sources, fallback, tasks, recalibration diff, and storage migration.");
