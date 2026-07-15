@@ -16,6 +16,7 @@ import {
 import { buildFallbackCoachResponse } from "../src/lib/aiFallback.ts";
 import { aiCoachRequestSchema, aiCoachResponseSchema } from "../src/lib/aiSchemas.ts";
 import { compareCalibration, createCalibrationRound, createValidationTasks } from "../src/lib/calibration.ts";
+import { ensureActiveCycle, transitionJourneyCycle } from "../src/lib/cycleEngine.ts";
 import { exampleCases } from "../src/data/examples.ts";
 import aiCoachHandler from "../api/ai/coach.ts";
 import {
@@ -39,6 +40,8 @@ Object.defineProperty(globalThis, "localStorage", {
   value: {
     getItem: (key: string) => storageValues.get(key) ?? null,
     setItem: (key: string, value: string) => storageValues.set(key, value),
+    removeItem: (key: string) => storageValues.delete(key),
+    clear: () => storageValues.clear(),
   },
 });
 
@@ -313,14 +316,68 @@ storageValues.set("startup-traffic-light:calibration-history", JSON.stringify([{
 assert.deepEqual(loadCalibrationHistory(), []);
 
 const emptyWorkspace = createEmptyWorkspace(makeProject({ id: "workspace-project" }));
-assert.equal(emptyWorkspace.schemaVersion, 4);
+assert.equal(emptyWorkspace.schemaVersion, 5);
 assert.equal(emptyWorkspace.initialProject, null);
 emptyWorkspace.tasks = createValidationTasks(emptyWorkspace.project.id, structureOnly);
 emptyWorkspace.tasks[0] = { ...emptyWorkspace.tasks[0], status: "completed", result: "完成 3 次访谈", evidenceIds: ["proof-1"] };
 saveWorkspace(emptyWorkspace);
 assert.equal(loadWorkspace().tasks[0].result, "完成 3 次访谈");
-storageValues.set("startup-traffic-light:workspace:v4", "{broken-json");
-assert.equal(loadWorkspace().schemaVersion, 4);
+storageValues.set("startup-traffic-light:workspace:v5", "{broken-json");
+assert.equal(loadWorkspace().schemaVersion, 5);
+
+storageValues.delete("startup-traffic-light:workspace:v5");
+storageValues.set("startup-traffic-light:workspace:v4", JSON.stringify({
+  schemaVersion: 4,
+  project: emptyWorkspace.project,
+  initialProject: emptyWorkspace.project,
+  evidenceRecords: [],
+  plans: emptyGatePlans,
+  redTeamTurns: [],
+  tasks: emptyWorkspace.tasks,
+  rounds: [],
+  surveys: [],
+}));
+const migratedV5 = loadWorkspace();
+assert.equal(migratedV5.schemaVersion, 5);
+assert.deepEqual(migratedV5.cycles, []);
+
+const cycleWorkspace = createEmptyWorkspace(makeProject({ id: "cycle-project", currentStage: "research" }));
+const cycleStartReport = buildReport(cycleWorkspace.project, emptyEvidence, emptyRoadtestPlan);
+const activeCycleWorkspace = ensureActiveCycle(cycleWorkspace, cycleStartReport);
+assert.equal(activeCycleWorkspace.cycles.length, 1);
+assert.equal(activeCycleWorkspace.cycles[0].status, "active");
+assert.equal(activeCycleWorkspace.tasks.length, 7);
+assert.equal(activeCycleWorkspace.tasks.every((task) => task.cycleId === activeCycleWorkspace.activeCycleId), true);
+activeCycleWorkspace.tasks[0] = { ...activeCycleWorkspace.tasks[0], status: "completed", result: "访谈 5 位用户" };
+activeCycleWorkspace.evidenceRecords.push({
+  id: "cycle-payment-proof",
+  projectId: activeCycleWorkspace.project.id,
+  cycleId: activeCycleWorkspace.activeCycleId,
+  type: "payment",
+  occurredAt: "2026-07-15",
+  actor: "1 位目标用户",
+  behavior: "支付小额预订",
+  quantity: 1,
+  source: "payment_or_retention",
+  note: "",
+  url: "",
+  verifiable: true,
+  reviewStatus: "confirmed",
+  origin: "manual",
+  rawRecordIds: [],
+});
+const cycleEndReport = buildReport(
+  activeCycleWorkspace.project,
+  deriveEvidenceSummary(activeCycleWorkspace.evidenceRecords),
+  emptyRoadtestPlan,
+);
+const nextCycleWorkspace = transitionJourneyCycle(activeCycleWorkspace, cycleEndReport, "advance");
+assert.equal(nextCycleWorkspace.project.currentStage, "demo");
+assert.equal(nextCycleWorkspace.cycles.filter((cycle) => cycle.status === "completed").length, 1);
+assert.equal(nextCycleWorkspace.cycles.find((cycle) => cycle.status === "completed")?.taskSnapshot[0].result, "访谈 5 位用户");
+assert.equal(nextCycleWorkspace.evidenceRecords.some((record) => record.id === "cycle-payment-proof"), true);
+assert.equal(nextCycleWorkspace.tasks.every((task) => task.cycleId === nextCycleWorkspace.activeCycleId), true);
+assert.notEqual(nextCycleWorkspace.activeCycleId, activeCycleWorkspace.activeCycleId);
 
 const intakeRequest = aiCoachRequestSchema.parse({
   ...aiRequest,
@@ -338,6 +395,23 @@ const surveyRequest = aiCoachRequestSchema.parse({ ...aiRequest, mode: "survey_g
 assert.ok((buildFallbackCoachResponse(surveyRequest).data.surveyDraft?.questions.length ?? 0) >= 3);
 const taskRequest = aiCoachRequestSchema.parse({ ...aiRequest, mode: "task_decomposition" });
 assert.equal(buildFallbackCoachResponse(taskRequest).data.taskDrafts?.length, 7);
+const cycleReviewRequest = aiCoachRequestSchema.parse({
+  ...aiRequest,
+  mode: "cycle_review",
+  cycle: {
+    cycleNumber: 2,
+    completedTasks: 4,
+    failedTasks: 1,
+    newEvidenceCount: 3,
+    evidenceDelta: 12,
+    currentLight: "yellow",
+    ruleRecommendation: "hold",
+    previousGoal: "验证目标用户是否真的存在痛点",
+  },
+});
+const cycleReviewFallback = buildFallbackCoachResponse(cycleReviewRequest);
+assert.equal(cycleReviewFallback.data.cycleReview?.nextGoal.length ? true : false, true);
+assert.match(cycleReviewFallback.data.cycleReview?.summary ?? "", /第 2 轮/);
 
 const pendingEvidence = evidenceSummaryToRecords("pending-test", { ...emptyEvidence, interviewCount: 3 });
 pendingEvidence[0].reviewStatus = "pending";
@@ -345,4 +419,4 @@ assert.equal(deriveEvidenceSummary(pendingEvidence).interviewCount, 0);
 pendingEvidence[0].reviewStatus = "confirmed";
 assert.equal(deriveEvidenceSummary(pendingEvidence).interviewCount, 3);
 
-console.log("P0 verification passed: AI intake, four lights, structured plans, evidence sources, fallback, tasks, recalibration diff, and storage migration.");
+console.log("P0 verification passed: AI intake, four lights, structured plans, evidence sources, fallback, multi-cycle journey, tasks, recalibration diff, and storage migration.");

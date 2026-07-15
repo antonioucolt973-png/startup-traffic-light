@@ -60,6 +60,7 @@ export type EvidenceSource =
 export interface EvidenceRecord {
   id: string;
   projectId: string;
+  cycleId?: string;
   type: EvidenceType;
   occurredAt: string;
   actor: string;
@@ -91,6 +92,7 @@ export interface SurveyDraft {
 export interface SurveyCampaign {
   id: string;
   projectId: string;
+  cycleId?: string;
   gateId: GateId;
   slug: string;
   draft: SurveyDraft;
@@ -166,6 +168,7 @@ export interface RedTeamQuestion {
 export interface RedTeamTurn {
   id: string;
   projectId: string;
+  cycleId?: string;
   gateId: GateId;
   round: 1 | 2;
   question: string;
@@ -179,6 +182,7 @@ export interface RedTeamTurn {
 export interface ValidationTask {
   id: string;
   projectId: string;
+  cycleId?: string;
   day: number;
   title: string;
   detail: string;
@@ -192,6 +196,7 @@ export interface ValidationTask {
 export interface CalibrationRound {
   id: string;
   projectId: string;
+  cycleId?: string;
   projectName: string;
   createdAt: string;
   stage: ProjectStage;
@@ -227,10 +232,41 @@ export interface CalibrationDiff {
   newEvidenceCount: number;
 }
 
+export type CycleOutcome = "advance" | "hold" | "return";
+
+export interface JourneyCycle {
+  id: string;
+  projectId: string;
+  cycleNumber: number;
+  status: "active" | "completed";
+  startedAt: string;
+  completedAt?: string;
+  stageAtStart: ProjectStage;
+  stageAtEnd?: ProjectStage;
+  primaryGoal: string;
+  focusGate: GateId;
+  lightBefore: Light;
+  lightAfter?: Light;
+  evidenceScoreBefore: number;
+  evidenceScoreAfter?: number;
+  evidenceIdsAtStart: string[];
+  evidenceIdsAdded: string[];
+  planSnapshot: GatePlans;
+  taskSnapshot: ValidationTask[];
+  redTeamSnapshot: RedTeamTurn[];
+  risksBefore: string[];
+  risksAfter: string[];
+  aiReview: string;
+  recommendation: CycleOutcome;
+  outcome?: CycleOutcome;
+}
+
 export interface ProjectWorkspace {
-  schemaVersion: 4;
+  schemaVersion: 5;
   project: Project;
   initialProject: Project | null;
+  activeCycleId: string;
+  cycles: JourneyCycle[];
   evidenceRecords: EvidenceRecord[];
   plans: GatePlans;
   redTeamTurns: RedTeamTurn[];

@@ -10,13 +10,14 @@ import type {
 const dayPattern = /^第\s*(\d+)\s*天[：:]\s*/;
 const gateIds: GateId[] = ["user", "pain", "alternative", "acquisition", "payment", "delivery"];
 
-export function createValidationTasks(projectId: string, report: DecisionReport): ValidationTask[] {
+export function createValidationTasks(projectId: string, report: DecisionReport, cycleId?: string): ValidationTask[] {
   return report.sevenDayTasks.slice(0, 7).map((rawTask, index) => {
     const day = Number(rawTask.match(dayPattern)?.[1]) || index + 1;
     const detail = rawTask.replace(dayPattern, "").trim();
     return {
-      id: `${projectId}-day-${day}`,
+      id: `${cycleId ?? projectId}-day-${day}`,
       projectId,
+      cycleId,
       day,
       title: getTaskTitle(day, detail),
       detail,
@@ -38,6 +39,7 @@ export function createCalibrationRound(
   const round: CalibrationRound = {
     id: `${now.getTime()}-${report.light}`,
     projectId: workspace.project.id,
+    cycleId: workspace.activeCycleId || undefined,
     projectName: workspace.project.name || "未命名项目",
     createdAt: now.toISOString(),
     stage: workspace.project.currentStage,

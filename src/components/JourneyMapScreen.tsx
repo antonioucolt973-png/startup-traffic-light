@@ -10,7 +10,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { motion } from "motion/react";
-import type { DecisionReport, GateId, Project, RoadtestStage } from "../types";
+import type { DecisionReport, GateId, JourneyCycle, Project, RoadtestStage } from "../types";
 import { ProjectVehicle } from "./ProjectVehicle";
 
 interface JourneyMapScreenProps {
@@ -19,6 +19,7 @@ interface JourneyMapScreenProps {
   activeGate: GateId;
   onGateChange: (gate: GateId) => void;
   onEnterGate: () => void;
+  activeCycle?: JourneyCycle;
 }
 
 interface RoutePoint {
@@ -43,7 +44,7 @@ const stageMeta: Array<{ id: RoadtestStage; label: string; detail: string }> = [
   { id: "delivery", label: "交付工厂", detail: "确认一人能兑现" },
 ];
 
-export function JourneyMapScreen({ project, report, activeGate, onGateChange, onEnterGate }: JourneyMapScreenProps) {
+export function JourneyMapScreen({ project, report, activeGate, onGateChange, onEnterGate, activeCycle }: JourneyMapScreenProps) {
   const compactMap = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
   const displayPoints = compactMap
     ? routePoints.map((point, index) => ({ ...point, x: 18, y: 17 + index * 13.5 }))
@@ -61,7 +62,7 @@ export function JourneyMapScreen({ project, report, activeGate, onGateChange, on
           <p>选择一个地点，项目车会驶入对应挑战。AI负责规划路线，只有访谈、试用、报价和付款等真实行为能点亮道路。</p>
         </div>
         <div className="mapProgressSummary">
-          <span>当前旅程</span>
+          <span>第 {activeCycle?.cycleNumber ?? 1} 轮旅程</span>
           <strong>{passedCount}<small>/6 路口通过</small></strong>
           <div><i style={{ width: `${(passedCount / 6) * 100}%` }} /></div>
           <p>{project.name || "未命名项目"}</p>

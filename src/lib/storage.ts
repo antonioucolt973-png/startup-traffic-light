@@ -13,6 +13,7 @@ import type {
   Evidence,
   EvidenceRecord,
   GatePlans,
+  JourneyCycle,
   Project,
   ProjectWorkspace,
   RedTeamTurn,
@@ -25,14 +26,16 @@ const PROJECT_KEY = "startup-traffic-light:project";
 const EVIDENCE_KEY = "startup-traffic-light:evidence";
 const ROADTEST_PLAN_KEY = "startup-traffic-light:roadtest-plan";
 const CALIBRATION_HISTORY_KEY = "startup-traffic-light:calibration-history";
-const WORKSPACE_KEY = "startup-traffic-light:workspace:v4";
-const PREVIOUS_WORKSPACE_KEYS = ["startup-traffic-light:workspace:v3", "startup-traffic-light:workspace:v2"];
+const WORKSPACE_KEY = "startup-traffic-light:workspace:v5";
+const PREVIOUS_WORKSPACE_KEYS = ["startup-traffic-light:workspace:v4", "startup-traffic-light:workspace:v3", "startup-traffic-light:workspace:v2"];
 
 export function createEmptyWorkspace(project: Project = emptyProject): ProjectWorkspace {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     project: normalizeProject(project),
     initialProject: null,
+    activeCycleId: "",
+    cycles: [],
     evidenceRecords: [],
     plans: normalizeGatePlans(emptyGatePlans),
     redTeamTurns: [],
@@ -44,7 +47,7 @@ export function createEmptyWorkspace(project: Project = emptyProject): ProjectWo
 
 export function loadWorkspace(): ProjectWorkspace {
   const saved = readJson<unknown>(WORKSPACE_KEY);
-  if (saved && typeof saved === "object" && (saved as Partial<ProjectWorkspace>).schemaVersion === 4) {
+  if (saved && typeof saved === "object" && (saved as Partial<ProjectWorkspace>).schemaVersion === 5) {
     return normalizeWorkspace(saved as Partial<ProjectWorkspace>);
   }
 
@@ -106,9 +109,11 @@ function migrateLegacyWorkspace(): ProjectWorkspace {
   const now = new Date().toISOString();
 
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     project,
     initialProject: project.name || project.description ? project : null,
+    activeCycleId: "",
+    cycles: [],
     evidenceRecords: evidenceSummaryToRecords(project.id, evidence, now),
     plans: legacyPlanToGatePlans(plan),
     redTeamTurns: [],
@@ -120,19 +125,27 @@ function migrateLegacyWorkspace(): ProjectWorkspace {
 
 function normalizeWorkspace(workspace: Partial<ProjectWorkspace>): ProjectWorkspace {
   const project = normalizeProject(workspace.project ?? emptyProject);
+  const cycles = Array.isArray(workspace.cycles)
+    ? workspace.cycles.filter(isJourneyCycle).map((cycle) => normalizeJourneyCycle(cycle, project)).slice(0, 24)
+    : [];
+  const activeCycleId = typeof workspace.activeCycleId === "string" && cycles.some((cycle) => cycle.id === workspace.activeCycleId && cycle.status === "active")
+    ? workspace.activeCycleId
+    : cycles.find((cycle) => cycle.status === "active")?.id ?? "";
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     project,
     initialProject: workspace.initialProject ? normalizeProject(workspace.initialProject) : null,
+    activeCycleId,
+    cycles,
     evidenceRecords: Array.isArray(workspace.evidenceRecords)
       ? workspace.evidenceRecords.filter(isEvidenceRecord).map((record) => normalizeEvidenceRecord(record, project.id))
       : [],
     plans: normalizeGatePlans(workspace.plans),
     redTeamTurns: Array.isArray(workspace.redTeamTurns)
-      ? workspace.redTeamTurns.filter(isRedTeamTurn).slice(-24)
+      ? workspace.redTeamTurns.filter(isRedTeamTurn).map((turn) => ({ ...turn, cycleId: turn.cycleId || activeCycleId || undefined })).slice(-24)
       : [],
     tasks: Array.isArray(workspace.tasks)
-      ? workspace.tasks.filter(isValidationTask).map((task) => normalizeValidationTask(task, project.id)).slice(0, 7)
+      ? workspace.tasks.filter(isValidationTask).map((task) => normalizeValidationTask(task, project.id, activeCycleId)).slice(0, 7)
       : [],
     rounds: Array.isArray(workspace.rounds)
       ? workspace.rounds.filter(isCalibrationRound).map((round) => normalizeCalibrationRound(round, project)).slice(0, 12)
@@ -291,10 +304,11 @@ function isCalibrationRound(value: unknown): value is CalibrationRound {
     typeof round.evidenceScore === "number";
 }
 
-function normalizeValidationTask(task: ValidationTask, projectId: string): ValidationTask {
+function normalizeValidationTask(task: ValidationTask, projectId: string, activeCycleId = ""): ValidationTask {
   return {
     id: task.id,
     projectId,
+    cycleId: typeof task.cycleId === "string" ? task.cycleId : activeCycleId || undefined,
     day: Math.min(7, Math.max(1, task.day)),
     title: typeof task.title === "string" ? task.title : `第 ${task.day} 天 · 现实验证`,
     detail: typeof task.detail === "string" ? task.detail : "",
@@ -303,6 +317,47 @@ function normalizeValidationTask(task: ValidationTask, projectId: string): Valid
     status: task.status === "completed" || task.status === "failed" ? task.status : "pending",
     result: typeof task.result === "string" ? task.result : "",
     evidenceIds: Array.isArray(task.evidenceIds) ? task.evidenceIds.filter((id): id is string => typeof id === "string") : [],
+  };
+}
+
+function isJourneyCycle(value: unknown): value is JourneyCycle {
+  if (!value || typeof value !== "object") return false;
+  const cycle = value as Partial<JourneyCycle>;
+  return typeof cycle.id === "string" &&
+    typeof cycle.projectId === "string" &&
+    typeof cycle.cycleNumber === "number" &&
+    typeof cycle.startedAt === "string" &&
+    (cycle.status === "active" || cycle.status === "completed");
+}
+
+function normalizeJourneyCycle(cycle: JourneyCycle, project: Project): JourneyCycle {
+  return {
+    ...cycle,
+    projectId: project.id,
+    cycleNumber: Math.max(1, Math.round(cycle.cycleNumber || 1)),
+    status: cycle.status === "completed" ? "completed" : "active",
+    stageAtStart: normalizeLegacyStage(cycle.stageAtStart),
+    stageAtEnd: cycle.stageAtEnd ? normalizeLegacyStage(cycle.stageAtEnd) : undefined,
+    primaryGoal: typeof cycle.primaryGoal === "string" ? cycle.primaryGoal : "补齐最关键的现实证据。",
+    focusGate: normalizeGateId(cycle.focusGate),
+    lightBefore: normalizeLight(cycle.lightBefore),
+    lightAfter: cycle.lightAfter ? normalizeLight(cycle.lightAfter) : undefined,
+    evidenceScoreBefore: typeof cycle.evidenceScoreBefore === "number" ? cycle.evidenceScoreBefore : 0,
+    evidenceScoreAfter: typeof cycle.evidenceScoreAfter === "number" ? cycle.evidenceScoreAfter : undefined,
+    evidenceIdsAtStart: normalizeStringArray(cycle.evidenceIdsAtStart),
+    evidenceIdsAdded: normalizeStringArray(cycle.evidenceIdsAdded),
+    planSnapshot: normalizeGatePlans(cycle.planSnapshot),
+    taskSnapshot: Array.isArray(cycle.taskSnapshot)
+      ? cycle.taskSnapshot.filter(isValidationTask).map((task) => normalizeValidationTask(task, project.id, cycle.id))
+      : [],
+    redTeamSnapshot: Array.isArray(cycle.redTeamSnapshot)
+      ? cycle.redTeamSnapshot.filter(isRedTeamTurn).map((turn) => ({ ...turn, projectId: project.id, cycleId: cycle.id }))
+      : [],
+    risksBefore: normalizeStringArray(cycle.risksBefore),
+    risksAfter: normalizeStringArray(cycle.risksAfter),
+    aiReview: typeof cycle.aiReview === "string" ? cycle.aiReview : "",
+    recommendation: normalizeCycleOutcome(cycle.recommendation),
+    outcome: cycle.outcome ? normalizeCycleOutcome(cycle.outcome) : undefined,
   };
 }
 
@@ -345,4 +400,20 @@ function normalizeRoadtestStatus(status: unknown): RoadtestStatus {
 
 function normalizeLegacyStage(stage: string): Project["currentStage"] {
   return stage === "research" || stage === "demo" || stage === "mvp" || stage === "growth" ? stage : "idea";
+}
+
+function normalizeGateId(value: unknown): JourneyCycle["focusGate"] {
+  return value === "pain" || value === "alternative" || value === "acquisition" || value === "payment" || value === "delivery" ? value : "user";
+}
+
+function normalizeLight(value: unknown): JourneyCycle["lightBefore"] {
+  return value === "red" || value === "green" || value === "blue" ? value : "yellow";
+}
+
+function normalizeCycleOutcome(value: unknown): JourneyCycle["recommendation"] {
+  return value === "advance" || value === "return" ? value : "hold";
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }

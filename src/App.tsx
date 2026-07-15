@@ -18,6 +18,7 @@ import {
   plansToRoadtestPlan,
 } from "./lib/decisionEngine";
 import { createCalibrationRound, createValidationTasks } from "./lib/calibration";
+import { ensureActiveCycle, transitionJourneyCycle } from "./lib/cycleEngine";
 import {
   createEmptyWorkspace,
   evidenceSummaryToRecords,
@@ -34,6 +35,7 @@ import {
   type CloudSession,
 } from "./lib/cloud";
 import type {
+  CycleOutcome,
   GateId,
   Project,
   ProjectWorkspace,
@@ -46,8 +48,8 @@ const views: Array<{ id: ViewId; label: string; icon: React.ComponentType<{ size
   { id: "map", label: "路线总览", icon: Map },
   { id: "gate", label: "路口与红队", icon: Route },
   { id: "backpack", label: "证据背包", icon: Backpack },
-  { id: "route", label: "下一程路线", icon: ClipboardCheck },
-  { id: "refill", label: "证据回填", icon: RotateCcw },
+  { id: "route", label: "任务路线", icon: ClipboardCheck },
+  { id: "refill", label: "成长回顾", icon: RotateCcw },
 ];
 
 export default function App() {
@@ -65,6 +67,10 @@ export default function App() {
   const report = useMemo(
     () => buildReport(workspace.project, evidence, roadtestPlan),
     [workspace.project, evidence, roadtestPlan],
+  );
+  const activeCycle = useMemo(
+    () => workspace.cycles.find((cycle) => cycle.id === workspace.activeCycleId),
+    [workspace.activeCycleId, workspace.cycles],
   );
 
   useEffect(() => {
@@ -93,8 +99,8 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [cloudSession.user, workspace]);
   function navigate(view: ViewId) {
-    if (view === "route" || view === "refill") {
-      updateWorkspace((current) => ensureExecutionState(current));
+    if (view !== "departure") {
+      updateWorkspace((current) => ensureActiveCycle(current, buildWorkspaceReport(current)));
     }
     setActiveView(view);
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
@@ -114,23 +120,16 @@ export default function App() {
     });
   }
 
-  function setProject(project: Project) {
-    const normalized = normalizeProject(project);
-    updateWorkspace((current) => ({
-      ...current,
-      project: normalized,
-      tasks: projectInputsChanged(current.project, normalized) ? [] : current.tasks,
-    }));
-  }
-
   function confirmProject(project: Project, initialProject: Project) {
     const normalized = normalizeProject(project);
-    updateWorkspace((current) => ({
-      ...current,
-      project: normalized,
-      initialProject: normalizeProject(initialProject),
-      tasks: projectInputsChanged(current.project, normalized) ? [] : current.tasks,
-    }));
+    updateWorkspace((current) => current.project.id !== normalized.id
+      ? { ...createEmptyWorkspace(normalized), initialProject: normalizeProject(initialProject) }
+      : {
+        ...current,
+        project: normalized,
+        initialProject: current.initialProject ?? normalizeProject(initialProject),
+        tasks: projectInputsChanged(current.project, normalized) ? [] : current.tasks,
+      });
   }
 
   function loadExample(index: number) {
@@ -154,13 +153,16 @@ export default function App() {
   }
 
   function addEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
-    updateWorkspace((current) => ({ ...current, evidenceRecords: [record, ...current.evidenceRecords] }));
+    updateWorkspace((current) => ({
+      ...current,
+      evidenceRecords: [{ ...record, cycleId: record.cycleId || current.activeCycleId || undefined }, ...current.evidenceRecords],
+    }));
   }
 
   function saveSurvey(survey: ProjectWorkspace["surveys"][number]) {
     updateWorkspace((current) => ({
       ...current,
-      surveys: [survey, ...current.surveys.filter((item) => item.id !== survey.id && !(item.gateId === survey.gateId && item.status === "published"))],
+      surveys: [{ ...survey, cycleId: survey.cycleId || current.activeCycleId || undefined }, ...current.surveys.filter((item) => item.id !== survey.id && !(item.gateId === survey.gateId && item.status === "published"))],
     }));
   }
 
@@ -180,7 +182,10 @@ export default function App() {
   }
 
   function addRedTeamTurn(turn: ProjectWorkspace["redTeamTurns"][number]) {
-    updateWorkspace((current) => ({ ...current, redTeamTurns: [...current.redTeamTurns, turn].slice(-24) }));
+    updateWorkspace((current) => ({
+      ...current,
+      redTeamTurns: [...current.redTeamTurns, { ...turn, cycleId: turn.cycleId || current.activeCycleId || undefined }].slice(-24),
+    }));
   }
 
   function updateTask(task: ProjectWorkspace["tasks"][number]) {
@@ -190,12 +195,15 @@ export default function App() {
   function resetTasks() {
     updateWorkspace((current) => {
       const currentReport = buildWorkspaceReport(current);
-      return { ...current, tasks: createValidationTasks(current.project.id, currentReport) };
+      return { ...current, tasks: createValidationTasks(current.project.id, currentReport, current.activeCycleId || undefined) };
     });
   }
 
   function replaceTasks(tasks: ProjectWorkspace["tasks"]) {
-    updateWorkspace((current) => ({ ...current, tasks }));
+    updateWorkspace((current) => ({
+      ...current,
+      tasks: tasks.map((task) => ({ ...task, cycleId: task.cycleId || current.activeCycleId || undefined })),
+    }));
   }
 
   async function copyReport() {
@@ -219,6 +227,15 @@ export default function App() {
     });
     setSaveState("校准已保存");
     window.setTimeout(() => setSaveState("重新校准"), 1600);
+  }
+
+  function startNextCycle(outcome: CycleOutcome, aiReview: string) {
+    const next = transitionJourneyCycle(workspace, report, outcome, aiReview);
+    const nextCycle = next.cycles.find((cycle) => cycle.id === next.activeCycleId);
+    replaceWorkspace(next);
+    setActiveGate(nextCycle?.focusGate ?? "user");
+    setActiveView("departure");
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }
 
   return (
@@ -251,18 +268,19 @@ export default function App() {
         </div>
       </header>
 
-      {activeView !== "departure" && <JourneyStatusBar project={workspace.project} report={report} />}
+      {activeView !== "departure" && <JourneyStatusBar project={workspace.project} report={report} activeCycle={activeCycle} />}
 
       <div className={`journeyWorkspace view-${activeView}`}>
         <section className="journeyMain">
           {activeView === "departure" && (
             <ProjectDeparture
               project={workspace.project}
-              onChange={setProject}
               onConfirm={confirmProject}
               examples={exampleCases}
               onLoadExample={loadExample}
               onReady={() => navigate("map")}
+              activeCycle={activeCycle}
+              completedCycles={workspace.cycles.filter((cycle) => cycle.status === "completed")}
             />
           )}
           {activeView === "map" && (
@@ -272,6 +290,7 @@ export default function App() {
               activeGate={activeGate}
               onGateChange={setActiveGate}
               onEnterGate={() => enterGate()}
+              activeCycle={activeCycle}
             />
           )}
           {activeView === "gate" && (
@@ -323,12 +342,17 @@ export default function App() {
           {activeView === "refill" && (
             <EvidenceRefill
               report={report}
+              project={workspace.project}
+              evidence={evidence}
               tasks={workspace.tasks}
               records={workspace.evidenceRecords}
               rounds={workspace.rounds}
+              activeCycle={activeCycle}
+              completedCycles={workspace.cycles.filter((cycle) => cycle.status === "completed")}
               onTaskChange={updateTask}
               onOpenBackpack={() => navigate("backpack")}
               onRecalibrate={saveCurrentCalibration}
+              onStartNextCycle={startNextCycle}
               saveState={saveState}
             />
           )}
@@ -337,15 +361,6 @@ export default function App() {
       </div>
     </main>
   );
-}
-
-function ensureExecutionState(workspace: ProjectWorkspace): ProjectWorkspace {
-  const report = buildWorkspaceReport(workspace);
-  const hasCurrentTasks = workspace.tasks.length === 7 && workspace.tasks.every((task) => task.projectId === workspace.project.id);
-  const withTasks = hasCurrentTasks ? workspace : { ...workspace, tasks: createValidationTasks(workspace.project.id, report) };
-  const hasCurrentRound = withTasks.rounds.some((round) => round.projectId === workspace.project.id);
-  if (hasCurrentRound) return withTasks;
-  return { ...withTasks, rounds: [createCalibrationRound(withTasks, report)] };
 }
 
 function buildWorkspaceReport(workspace: ProjectWorkspace) {
@@ -357,7 +372,7 @@ function buildWorkspaceReport(workspace: ProjectWorkspace) {
 }
 
 function ensureWorkspaceVersion(workspace: ProjectWorkspace): ProjectWorkspace {
-  return { ...workspace, schemaVersion: 4 };
+  return { ...workspace, schemaVersion: 5 };
 }
 
 function projectInputsChanged(previous: Project, current: Project) {

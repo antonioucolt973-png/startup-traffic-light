@@ -1,10 +1,11 @@
 import { Gauge, HardDrive, Route, Timer, WalletCards } from "lucide-react";
-import type { DecisionReport, Light, Project } from "../types";
+import type { DecisionReport, JourneyCycle, Light, Project } from "../types";
 import { ProjectVehicle } from "./ProjectVehicle";
 
 interface JourneyStatusBarProps {
   project: Project;
   report: DecisionReport;
+  activeCycle?: JourneyCycle;
 }
 
 const lights: Array<{ id: Light; label: string }> = [
@@ -14,12 +15,12 @@ const lights: Array<{ id: Light; label: string }> = [
   { id: "blue", label: "行动" },
 ];
 
-export function JourneyStatusBar({ project, report }: JourneyStatusBarProps) {
+export function JourneyStatusBar({ project, report, activeCycle }: JourneyStatusBarProps) {
   return (
     <section className="journeyStatusBar" aria-label="项目当前状态">
       <div className="statusProject">
         <ProjectVehicle size="tiny" />
-        <div><span>当前项目</span><strong>{project.name || "未命名项目"}</strong></div>
+        <div><span>第 {activeCycle?.cycleNumber ?? 1} 轮旅程</span><strong>{project.name || "未命名项目"}</strong></div>
       </div>
 
       <div className="statusDecision">

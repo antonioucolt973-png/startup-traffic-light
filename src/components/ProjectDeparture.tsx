@@ -19,19 +19,21 @@ import { buildFallbackCoachResponse } from "../lib/aiFallback";
 import { requestAiCoach } from "../lib/aiClient";
 import type { AiCoachRequest, AiProjectDraft } from "../lib/aiSchemas";
 import { stageLabels } from "../lib/labels";
-import type { Project } from "../types";
+import type { JourneyCycle, Project } from "../types";
+import cockpitVehicle from "../assets/opc-cockpit-vehicle.png";
 import { ProjectVehicle } from "./ProjectVehicle";
 
 interface ProjectDepartureProps {
   project: Project;
-  onChange: (project: Project) => void;
   onConfirm: (project: Project, initialProject: Project) => void;
   examples: ExampleCase[];
   onLoadExample: (index: number) => void;
   onReady: () => void;
+  activeCycle?: JourneyCycle;
+  completedCycles: JourneyCycle[];
 }
 
-type DeparturePhase = "input" | "review" | "packing";
+type DeparturePhase = "input" | "review" | "packing" | "briefing";
 
 const destinations = [
   "确认问题是否值得做",
@@ -66,15 +68,16 @@ const emptyEvidence = {
 
 export function ProjectDeparture({
   project,
-  onChange,
   onConfirm,
   examples,
   onLoadExample,
   onReady,
+  activeCycle,
+  completedCycles,
 }: ProjectDepartureProps) {
   const reduceMotion = useReducedMotion();
   const compactAnimation = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-  const [phase, setPhase] = useState<DeparturePhase>("input");
+  const [phase, setPhase] = useState<DeparturePhase>(() => completedCycles.length > 0 && activeCycle ? "briefing" : "input");
   const [idea, setIdea] = useState(project.description);
   const [destination, setDestination] = useState<(typeof destinations)[number]>(destinations[0]);
   const [draft, setDraft] = useState<AiProjectDraft | null>(null);
@@ -181,7 +184,6 @@ export function ProjectDeparture({
       biggestUncertainty: "",
       existingArtifact: "",
     };
-    onChange(nextProject);
     onConfirm(nextProject, initialProject);
     setPhase("packing");
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
@@ -200,6 +202,28 @@ export function ProjectDeparture({
   return (
     <div className="departureScreen departureExperience">
       <AnimatePresence mode="wait">
+        {phase === "briefing" && activeCycle && (
+          <motion.section key="briefing" className="cycleBriefing" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
+            <div className="cycleBriefingSignal"><Sparkles size={18} /><span>第 {activeCycle.cycleNumber} 轮 · 下一程出发</span></div>
+            <div className="cycleBriefingLayout">
+              <div className="cycleBriefingCopy">
+                <span>{stageLabels[project.currentStage]}</span>
+                <h1>项目没有重新开始，它带着上一轮证据继续前进。</h1>
+                <p>AI 已继承项目资料、任务结果、风险变化和历史建议。本轮只聚焦一个最关键目标。</p>
+                <article><small>本轮核心任务</small><strong>{activeCycle.primaryGoal}</strong></article>
+                <div className="cycleBriefingActions">
+                  <button className="primaryButton" type="button" onClick={onReady}><Route size={17} />进入第 {activeCycle.cycleNumber} 轮地图</button>
+                  <button className="ghostButton" type="button" onClick={() => setPhase("input")}><Edit3 size={16} />调整项目资料</button>
+                </div>
+              </div>
+              <div className="cycleBriefingVehicle">
+                <img className="cockpitVehicleAsset" src={cockpitVehicle} alt="OPC 项目车" />
+                <div><span>已完成轮次</span><strong>{completedCycles.length}</strong><span>历史证据继续保留</span></div>
+              </div>
+            </div>
+          </motion.section>
+        )}
+
         {phase === "input" && (
           <motion.section
             key="input"
@@ -409,7 +433,7 @@ export function ProjectDeparture({
                 transition={{ duration: reduceMotion ? 0.01 : 5.25, times: [0, 0.78, 1], ease: [0.65, 0, 0.35, 1] }}
               >
                 <motion.div initial={{ scale: 0.94, opacity: 1 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}>
-                  <ProjectVehicle size="large" label={draft.name} />
+                  <img className="cockpitVehicleAsset packingVehicleAsset" src={cockpitVehicle} alt={`${draft.name}项目车`} />
                 </motion.div>
                 <div className="cargoIndicator"><span>装载进度</span><div>{luggage.map((item, index) => <motion.i key={item.label} initial={{ scale: 0.3, opacity: 0.25 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: reduceMotion ? 0 : 2.6 + index * 0.34 }} />)}</div></div>
               </motion.div>

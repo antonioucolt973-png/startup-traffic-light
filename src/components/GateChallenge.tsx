@@ -219,7 +219,7 @@ export function GateChallenge({
         </section>
 
         <section className="redTeamConversation">
-          <div className="redTeamRoomLabel"><ShieldAlert size={15} /><span>PRESSURE TEST ROOM</span></div>
+          <div className="redTeamRoomLabel"><ShieldAlert size={15} /><span>红队压力测试舱</span></div>
           <div className="workbenchHeading"><div><MessageSquareReply size={19} /><strong>红队压力测试</strong></div><span>{gateTurns.length}/2 轮</span></div>
           <div className="conversationThread">
             {gateTurns.map((turn) => (

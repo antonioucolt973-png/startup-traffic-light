@@ -10,6 +10,7 @@ export const aiModeSchema = z.enum([
   "plan_review",
   "red_team_followup",
   "task_personalization",
+  "cycle_review",
 ]);
 
 export const gateIdSchema = z.enum(["user", "pain", "alternative", "acquisition", "payment", "delivery"]);
@@ -53,6 +54,16 @@ export const aiCoachRequestSchema = z.object({
   }).optional(),
   previousQuestion: shortText.optional(),
   answer: shortText.optional(),
+  cycle: z.object({
+    cycleNumber: z.number().int().min(1).max(999),
+    completedTasks: z.number().int().min(0).max(1000),
+    failedTasks: z.number().int().min(0).max(1000),
+    newEvidenceCount: z.number().int().min(0).max(100000),
+    evidenceDelta: z.number().min(-100).max(100),
+    currentLight: z.enum(["red", "yellow", "green", "blue"]),
+    ruleRecommendation: z.enum(["advance", "hold", "return"]),
+    previousGoal: shortText,
+  }).optional(),
 });
 
 export const aiProjectDraftSchema = z.object({
@@ -102,6 +113,13 @@ export const aiCoachDataSchema = z.object({
     passCriteria: z.string().trim().min(1).max(240),
     stopCriteria: z.string().trim().min(1).max(240),
   })).max(7).optional(),
+  cycleReview: z.object({
+    summary: z.string().trim().min(1).max(600),
+    achievements: z.array(z.string().trim().min(1).max(200)).max(4),
+    riskChanges: z.array(z.string().trim().min(1).max(200)).max(4),
+    nextGoal: z.string().trim().min(1).max(300),
+    rationale: z.string().trim().min(1).max(400),
+  }).optional(),
 });
 
 export const aiCoachResponseSchema = z.object({

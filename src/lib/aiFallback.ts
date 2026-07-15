@@ -127,6 +127,28 @@ function buildFallbackData(request: AiCoachRequest): AiCoachData {
     };
   }
 
+  if (request.mode === "cycle_review") {
+    const cycle = request.cycle;
+    const recommendation = cycle?.ruleRecommendation ?? "hold";
+    const recommendationText = recommendation === "advance" ? "进入下一阶段" : recommendation === "return" ? "退回上一阶段修正假设" : "留在当前阶段更换路线";
+    return {
+      summary: "已根据本轮任务、现实证据和规则判灯完成阶段复盘。AI只解释变化并规划下一步，不会替规则引擎升级项目。",
+      questions: [],
+      missingFields: [],
+      suggestions: [],
+      cycleReview: {
+        summary: `第 ${cycle?.cycleNumber ?? 1} 轮完成 ${cycle?.completedTasks ?? 0} 项任务，${cycle?.failedTasks ?? 0} 项未通过，新增 ${cycle?.newEvidenceCount ?? 0} 条证据。规则建议：${recommendationText}。`,
+        achievements: [
+          cycle?.newEvidenceCount ? `带回 ${cycle.newEvidenceCount} 条新的现实证据` : "识别出本轮没有新增现实证据",
+          cycle?.completedTasks ? `完成 ${cycle.completedTasks} 项外部行动` : "明确了行动仍未真正发生",
+        ],
+        riskChanges: [cycle?.evidenceDelta ? `证据分变化 ${cycle.evidenceDelta > 0 ? "+" : ""}${cycle.evidenceDelta}` : "证据强度没有发生变化"],
+        nextGoal: request.project.biggestUncertainty || "补齐当前最薄弱的现实行为证据",
+        rationale: "下一轮只处理一个关键不确定性，继承历史证据，但不继承已经失效的行动方案。",
+      },
+    };
+  }
+
   if (request.mode === "assumption_breakdown") {
     return {
       summary: "项目已经被拆成六类待验证假设。下面内容是验证方向，不是已经成立的事实。",
