@@ -1492,3 +1492,431 @@ body { color: var(--ink); background: var(--asphalt); }
   .mapStop:hover { translate: 0; }
   .projectVehicle { filter: none !important; }
 }
+
+/* Journey World v2: light product shell + illustrated verification world. */
+:root {
+  --asphalt: #f5f7f2;
+  --green: #20c86a;
+  --yellow: #ffc928;
+  --red: #f05252;
+  --blue: #35ace7;
+  --world: #071721;
+  --world-2: #0b2533;
+  --world-line: rgba(105, 222, 255, .28);
+  --soft-shadow: 0 18px 50px rgba(31, 55, 42, .09);
+}
+
+.journeyApp {
+  background:
+    radial-gradient(circle at 12% 4%, rgba(53, 172, 231, .09), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(32, 200, 106, .08), transparent 24%),
+    var(--asphalt);
+}
+
+.journeyHeader {
+  min-height: 72px;
+  grid-template-columns: 240px minmax(0, 1fr) 210px;
+  padding: 9px 22px;
+  background: rgba(250, 252, 249, .92);
+  box-shadow: 0 8px 28px rgba(28, 55, 39, .07);
+}
+
+.journeyNav { background: rgba(235, 243, 238, .78); }
+.journeyNav button { min-height: 44px; }
+.journeyNav button.active { box-shadow: 0 7px 18px rgba(32, 200, 106, .2); }
+.journeyWorkspace, .journeyWorkspace.view-departure { width: min(1510px, 100%); padding: 22px; }
+
+.ideaLaunch {
+  min-height: calc(100vh - 116px);
+  grid-template-columns: minmax(0, 1.06fr) minmax(430px, .94fr);
+  gap: 22px 46px;
+  padding: 34px 42px 20px;
+  border-color: rgba(23, 34, 29, .12);
+  background: rgba(255, 255, 255, .72);
+  box-shadow: var(--soft-shadow);
+}
+
+.ideaLaunchCopy { min-width: 0; }
+.launchSignal { align-items: center; margin-bottom: 15px; }
+.launchSignal span { width: 9px; height: 9px; }
+.launchSignal strong { margin-left: 5px; color: #2c7050; font-size: 11px; }
+.ideaLaunchCopy h1 { max-width: 690px; margin-bottom: 14px; font-size: clamp(40px, 4.2vw, 62px); line-height: 1.04; }
+.ideaLaunchCopy p { max-width: 660px; font-size: 16px; line-height: 1.7; }
+
+.launchWorldBoard {
+  position: relative;
+  width: 100%;
+  min-height: 286px;
+  margin-top: 22px;
+  border: 1px solid #173b4b;
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(74, 177, 214, .06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 177, 214, .06) 1px, transparent 1px),
+    radial-gradient(circle at 52% 34%, rgba(55, 185, 232, .22), transparent 34%),
+    linear-gradient(145deg, #07151f, #0a2130 64%, #0b1b24);
+  background-size: 28px 28px, 28px 28px, auto, auto;
+  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, .025), 0 20px 34px rgba(8, 26, 36, .2);
+  overflow: hidden;
+}
+.launchWorldBoard::before { content: ""; position: absolute; inset: 9px; border: 1px solid rgba(90, 213, 250, .18); border-radius: 5px; pointer-events: none; }
+.worldBoardTopline { position: absolute; left: 20px; right: 20px; top: 17px; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.worldBoardTopline span { color: #68d9ff; font-size: 9px; font-weight: 900; }
+.worldBoardTopline strong { color: #dff7ff; font-size: 11px; }
+.launchWorldBoard > svg { position: absolute; left: 1%; right: 1%; bottom: 16px; width: 98%; height: 80%; }
+.launchTerrain { opacity: .66; }
+.launchTerrain.terrainBack { fill: #0b2c3c; }
+.launchTerrain.terrainFront { fill: #0a2430; }
+.launchWorldRoad { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.launchWorldRoad.shadow { stroke: #020a0f; stroke-width: 32; opacity: .74; transform: translateY(10px); }
+.launchWorldRoad.glow { stroke: url(#launchRoadGlow); stroke-width: 24; filter: drop-shadow(0 0 10px rgba(64, 206, 255, .68)); }
+.launchWorldRoad.dash { stroke: rgba(239, 252, 255, .82); stroke-width: 2; stroke-dasharray: 9 12; }
+.launchLandmark { position: absolute; z-index: 3; display: grid; justify-items: center; gap: 3px; color: #d7f7ff; font-size: 9px; font-weight: 800; }
+.launchLandmark i { width: 23px; height: 23px; border: 3px solid #dffaff; border-radius: 50% 50% 50% 7px; background: var(--blue); box-shadow: 0 0 17px rgba(53, 172, 231, .75); transform: rotate(-45deg); }
+.launchLandmark i::after { content: ""; display: block; width: 7px; height: 7px; margin: 5px; border-radius: 50%; background: #fff; }
+.launchLandmark span { padding: 3px 6px; border-radius: 3px; background: rgba(3, 14, 20, .74); }
+.launchLandmark.village { left: 15%; top: 55%; }
+.launchLandmark.forest { left: 38%; top: 29%; }
+.launchLandmark.port { left: 67%; top: 23%; }
+.launchLandmark.factory { right: 7%; top: 45%; }
+.launchLandmark.port i { background: var(--yellow); box-shadow: 0 0 17px rgba(255, 201, 40, .65); }
+.launchLandmark.factory i { background: var(--green); box-shadow: 0 0 17px rgba(32, 200, 106, .62); }
+.launchWorldVehicle { position: absolute; left: 5%; bottom: 44px; z-index: 5; transform: scale(.72); transform-origin: left bottom; filter: drop-shadow(0 8px 7px rgba(0, 0, 0, .4)); }
+.worldBoardLegend { position: absolute; right: 18px; bottom: 13px; z-index: 5; display: flex; gap: 11px; color: #8fb0bd; font-size: 8px; }
+.worldBoardLegend span { display: inline-flex; align-items: center; gap: 4px; }
+.worldBoardLegend i { width: 6px; height: 6px; border-radius: 50%; }
+.worldBoardLegend .red { background: var(--red); }
+.worldBoardLegend .yellow { background: var(--yellow); }
+.worldBoardLegend .green { background: var(--green); }
+
+.ideaConsole {
+  padding: 24px;
+  border-color: #bfd0c6;
+  border-top-width: 4px;
+  box-shadow: 12px 12px 0 rgba(214, 227, 219, .86);
+}
+.ideaField textarea { min-height: 154px; }
+.caseLibraryBar { padding: 13px 8px 0; }
+
+.projectManifest { padding: 32px 36px; box-shadow: var(--soft-shadow); }
+.manifestHeader h1 { font-size: clamp(32px, 3.6vw, 46px); }
+.manifestSummaryGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.manifestSummaryCard { min-height: 148px; display: grid; align-content: start; gap: 7px; padding: 17px; border: 1px solid #d5dfd9; border-top: 3px solid var(--blue); border-radius: 7px; background: #f8fbf9; }
+.manifestSummaryCard.primary { grid-column: span 2; border-top-color: var(--green); background: #f0faf4; }
+.manifestSummaryCard.warning { border-top-color: var(--red); background: #fff7f6; }
+.manifestSummaryCard.stage { border-top-color: var(--yellow); background: #fffbed; }
+.manifestSummaryCard > span { color: #64766c; font-size: 10px; font-weight: 900; }
+.manifestSummaryCard > strong { color: #17221d; font-size: 17px; line-height: 1.35; }
+.manifestSummaryCard > p { margin: 0; color: #5b6d63; font-size: 12px; line-height: 1.55; }
+.manifestEditToggle { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 16px; border: 1px solid #d1ddd6; border-radius: 7px; background: #f7faf8; }
+.manifestEditToggle > div { display: flex; align-items: center; gap: 11px; }
+.manifestEditToggle svg { color: var(--blue); }
+.manifestEditToggle p { display: grid; gap: 2px; margin: 0; }
+.manifestEditToggle p strong { font-size: 13px; }
+.manifestEditToggle p span { color: #66776e; font-size: 11px; }
+.manifestGrid { overflow: hidden; }
+
+.packingScene.packingCinematic {
+  background:
+    linear-gradient(rgba(91, 204, 240, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 204, 240, .045) 1px, transparent 1px),
+    radial-gradient(circle at 66% 52%, rgba(53, 172, 231, .19), transparent 34%),
+    linear-gradient(150deg, #07151f, #0a2634 70%, #091b24);
+  background-size: 30px 30px, 30px 30px, auto, auto;
+  border-color: #1a4557;
+}
+.packingSequence::before { content: ""; position: absolute; left: 8%; right: 12%; top: 49%; height: 2px; background: linear-gradient(90deg, transparent, rgba(75, 208, 250, .62), rgba(32, 200, 106, .5), transparent); box-shadow: 0 0 16px rgba(65, 202, 246, .38); }
+.packingVehicleStage { padding: 12px 14px 7px; border: 1px solid rgba(93, 218, 253, .22); border-radius: 8px; background: rgba(4, 17, 24, .5); backdrop-filter: blur(8px); }
+.packingRoadReveal { border-top-color: #4fcfff; background: #0f3646; box-shadow: 0 -8px 24px rgba(55, 199, 242, .16); }
+.packingRoadReveal span { background: rgba(225, 250, 255, .86); }
+
+@media (max-width: 1080px) {
+  .ideaLaunch { grid-template-columns: 1fr; }
+  .ideaLaunchCopy h1, .ideaLaunchCopy p { max-width: 820px; }
+  .launchWorldBoard { min-height: 300px; }
+  .manifestSummaryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .journeyWorkspace, .journeyWorkspace.view-departure { padding: 10px; }
+  .ideaLaunch { padding: 24px 16px 16px; border-radius: 8px; }
+  .ideaLaunchCopy h1 { font-size: 38px; }
+  .ideaLaunchCopy p { font-size: 14px; }
+  .launchWorldBoard { min-height: 230px; }
+  .launchLandmark { font-size: 7px; }
+  .launchLandmark i { width: 18px; height: 18px; border-width: 2px; }
+  .launchLandmark i::after { width: 5px; height: 5px; margin: 4px; }
+  .launchWorldVehicle { bottom: 33px; transform: scale(.58); }
+  .ideaConsole { padding: 18px; box-shadow: 7px 7px 0 rgba(214, 227, 219, .86); }
+  .manifestSummaryGrid { grid-template-columns: 1fr; }
+  .manifestSummaryCard.primary { grid-column: auto; }
+  .manifestEditToggle { align-items: stretch; flex-direction: column; }
+  .manifestEditToggle .ghostButton { width: 100%; }
+  .projectManifest { padding: 24px 18px; }
+}
+
+/* Exploration map and route-first checkpoint. */
+.expeditionScreen { gap: 14px; }
+.expeditionHeader {
+  min-height: 146px;
+  padding: 24px 28px;
+  border-color: #d2ddd6;
+  background: rgba(255, 255, 255, .84);
+  box-shadow: var(--soft-shadow);
+}
+.expeditionHeader h1 { max-width: 820px; font-size: clamp(30px, 3.3vw, 46px); }
+.expeditionHeader > div > p { max-width: 780px; font-size: 14px; }
+.expeditionMap {
+  min-height: 660px;
+  border-color: #173f50;
+  background:
+    linear-gradient(rgba(74, 188, 225, .05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 188, 225, .05) 1px, transparent 1px),
+    radial-gradient(circle at 42% 42%, rgba(47, 181, 228, .2), transparent 35%),
+    linear-gradient(145deg, #06131d, #092433 68%, #081820);
+  background-size: 32px 32px, 32px 32px, auto, auto;
+  box-shadow: inset 0 0 0 8px rgba(255, 255, 255, .025), 0 24px 54px rgba(8, 30, 42, .22);
+}
+.expeditionMap::before { content: ""; position: absolute; inset: 12px; z-index: 1; border: 1px solid rgba(88, 210, 247, .18); border-radius: 5px; pointer-events: none; }
+.mapHudTitle { position: absolute; left: 30px; top: 22px; z-index: 6; display: grid; gap: 4px; }
+.mapHudTitle span { color: #58d8ff; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.mapHudTitle strong { max-width: 310px; overflow: hidden; color: #eefbff; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.mapRegionLabels { left: 30px; right: 240px; top: 72px; grid-template-columns: 1.35fr 1.1fr .72fr; gap: 8px; }
+.mapRegionLabels > div { padding: 8px 10px; border: 1px solid rgba(87, 205, 239, .18); border-top: 2px solid #45cdf8; background: rgba(5, 22, 31, .75); backdrop-filter: blur(8px); }
+.mapRegionLabels > div:nth-child(2) { border-top-color: var(--yellow); }
+.mapRegionLabels > div:nth-child(3) { border-top-color: var(--green); }
+.mapRegionLabels strong { color: #e7faff; font-size: 10px; }
+.mapRegionLabels span { color: #7fa5b4; font-size: 8px; }
+.mapArtwork { z-index: 2; right: 210px; width: calc(100% - 210px); height: 100%; }
+.mapHill.far { fill: #0b2b3a; opacity: .86; }
+.mapHill.near { fill: #0a2230; opacity: .94; }
+.mapPlatform ellipse:first-child { fill: #02090e; opacity: .7; }
+.mapPlatform ellipse:last-child { fill: url(#worldLand); stroke: rgba(64, 202, 245, .22); stroke-width: 2; }
+.mapBuildings { fill: #1d6680; opacity: .74; filter: drop-shadow(0 8px 5px rgba(0, 0, 0, .35)); }
+.mapTrees { fill: #24a16a; opacity: .9; filter: drop-shadow(0 0 7px rgba(32, 200, 106, .25)); }
+.mapRoadDepth, .mapRoadBorder, .mapRoad, .mapRoadDash { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.mapRoadDepth { stroke: #01070b; stroke-width: 56; opacity: .8; transform: translateY(12px); }
+.mapRoadBorder { stroke: rgba(96, 222, 255, .45); stroke-width: 48; filter: url(#roadGlow); }
+.mapRoad { stroke: url(#worldRoad); stroke-width: 36; filter: drop-shadow(0 0 9px rgba(65, 207, 249, .62)); }
+.mapRoadDash { stroke: rgba(237, 252, 255, .84); stroke-width: 2.5; stroke-dasharray: 12 15; }
+.mapStop {
+  width: 132px;
+  min-height: 58px;
+  grid-template-columns: 18px 32px minmax(0, 1fr);
+  border-color: rgba(112, 216, 247, .4);
+  background: rgba(6, 23, 32, .9);
+  color: #eafaff;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, .3), inset 0 0 0 1px rgba(255, 255, 255, .04);
+  backdrop-filter: blur(10px);
+}
+.mapStop:hover { box-shadow: 0 13px 26px rgba(0, 0, 0, .34), 0 0 18px rgba(53, 172, 231, .2); }
+.mapStop.active { border-color: #8ce9ff; box-shadow: 0 0 0 3px rgba(53, 172, 231, .18), 0 0 24px rgba(53, 172, 231, .35); }
+.mapStopNumber { color: #658b99; }
+.mapStopIcon { background: rgba(53, 172, 231, .13); color: #61d9ff; }
+.mapStopCopy strong { color: #ecfbff; }
+.mapStopCopy small { color: #8ca9b4; }
+.mapStop.status已通过 { border-color: var(--green); }
+.mapStop.status可路测 { border-color: var(--yellow); }
+.mapStop.status立即行动 { border-color: var(--blue); }
+.mapStop.status先停手, .mapStop.status计划太虚 { border-color: var(--red); }
+.mapVehicleMarker { z-index: 8; }
+.mapVehicleMarker .projectVehicle { filter: drop-shadow(0 0 9px rgba(64, 211, 255, .72)) drop-shadow(0 10px 7px rgba(0, 0, 0, .45)); }
+.mapFinish { right: 20.5%; top: 17%; color: #b6f4cd; }
+.mapFinish svg { filter: drop-shadow(0 0 8px rgba(32, 200, 106, .6)); }
+.mapWorldRail { position: absolute; top: 18px; right: 18px; bottom: 18px; z-index: 7; width: 195px; display: grid; align-content: start; gap: 10px; padding: 12px; border: 1px solid rgba(99, 213, 247, .22); border-radius: 7px; background: rgba(4, 15, 22, .84); backdrop-filter: blur(12px); }
+.mapWorldRail > div { display: grid; gap: 7px; padding: 13px; border: 1px solid rgba(110, 207, 235, .14); border-radius: 6px; background: rgba(19, 48, 61, .48); }
+.mapWorldRail span { color: #7ea0ae; font-size: 9px; font-weight: 800; }
+.mapWorldRail strong { color: #effcff; font-size: 25px; }
+.mapWorldRail strong small { margin-left: 4px; color: #7598a6; font-size: 10px; }
+.mapWorldRail p { margin: 0; color: #85a5b1; font-size: 9px; }
+.mapWorldRail progress { width: 100%; height: 6px; accent-color: var(--green); }
+.worldRailLight > div { display: flex; gap: 7px; padding: 8px; border-radius: 20px; background: #02090d; }
+.worldRailLight i { width: 19px; height: 19px; border-radius: 50%; background: #182830; }
+.worldRailLight.light-red i:nth-child(1) { background: var(--red); box-shadow: 0 0 14px rgba(240, 82, 82, .7); }
+.worldRailLight.light-yellow i:nth-child(2) { background: var(--yellow); box-shadow: 0 0 14px rgba(255, 201, 40, .68); }
+.worldRailLight.light-green i:nth-child(3) { background: var(--green); box-shadow: 0 0 14px rgba(32, 200, 106, .68); }
+.worldRailLight.light-blue i:nth-child(4) { background: var(--blue); box-shadow: 0 0 14px rgba(53, 172, 231, .68); }
+.expeditionGateFocus { min-height: 112px; box-shadow: var(--soft-shadow); }
+
+.gateChallengeHeader { min-height: 150px; }
+.aiRoutePlanner { padding: 22px; border-radius: 8px; background: linear-gradient(135deg, #effaff, #f4fbf7); }
+.routePlannerActions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.routeCustomButton { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; border: 1px solid #b9d6e3; border-radius: 6px; background: #fff; color: #264652; font-size: 12px; font-weight: 800; }
+.routeOptionGrid article { min-height: 220px; }
+.gateWorkbench { align-items: stretch; }
+.planWorkbench { display: grid; align-content: start; gap: 16px; }
+.selectedMissionCard { display: grid; gap: 15px; padding: 18px; border: 1px solid #a8d8bd; border-left: 5px solid var(--green); border-radius: 7px; background: #f1fbf5; }
+.selectedMissionCard header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.selectedMissionCard header > div { display: grid; gap: 5px; }
+.selectedMissionCard header span { color: #298055; font-size: 10px; font-weight: 900; }
+.selectedMissionCard header strong { color: #17221d; font-size: 18px; line-height: 1.45; }
+.selectedMissionCard header button { flex: 0 0 auto; min-height: 34px; padding: 0 10px; border: 1px solid #b9cdc1; border-radius: 5px; background: #fff; color: #41564a; font-size: 11px; font-weight: 800; }
+.missionFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.missionFacts p { min-height: 74px; display: grid; align-content: start; gap: 6px; margin: 0; padding: 11px; border-radius: 6px; background: #fff; }
+.missionFacts p.stop { border-left: 3px solid var(--red); }
+.missionFacts span { color: #718178; font-size: 9px; font-weight: 900; }
+.missionFacts strong { color: #263a2f; font-size: 12px; line-height: 1.5; }
+.routeAdjustForm { padding: 15px; border: 1px solid #cfdad4; border-radius: 7px; background: #f8faf9; }
+.routeAdjustDone { grid-column: 1 / -1; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 6px; background: #17221d; color: #fff; font-weight: 800; }
+.routeAdjustDone:disabled { cursor: not-allowed; opacity: .45; }
+.planEmptyState { min-height: 240px; display: grid; place-items: center; align-content: center; gap: 8px; padding: 24px; border: 1px dashed #b9c9c0; border-radius: 7px; background: #f8faf9; text-align: center; }
+.planEmptyState svg { color: var(--blue); }
+.planEmptyState strong { font-size: 17px; }
+.planEmptyState p { max-width: 380px; margin: 0; color: #63756a; font-size: 12px; line-height: 1.55; }
+.planEmptyState button { margin-top: 4px; background: transparent; color: #23754c; font-size: 11px; font-weight: 900; text-decoration: underline; text-underline-offset: 3px; }
+.planActions .primaryButton:disabled { cursor: not-allowed; opacity: .45; }
+.redTeamConversation { position: relative; overflow: hidden; background: radial-gradient(circle at 84% 7%, rgba(240, 82, 82, .15), transparent 28%), #151113; }
+.redTeamConversation::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, transparent 0 31px, rgba(240, 82, 82, .035) 32px); }
+.redTeamRoomLabel { position: relative; z-index: 1; display: flex; align-items: center; gap: 7px; color: #ff7d82; font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.redTeamConversation > * { position: relative; z-index: 1; }
+
+.gateChallengeScreen .gateChallengeHeader { min-height: 118px; padding: 20px 24px; }
+.gateChallengeScreen .gateChallengeHeader h1 { font-size: clamp(28px, 2.7vw, 39px); }
+.gateChallengeScreen .roadMap { gap: 8px; }
+.gateChallengeScreen .roadStage { min-height: 102px; display: grid; grid-template-rows: auto 1fr; padding: 10px; }
+.gateChallengeScreen .roadStageHead { align-items: center; }
+.gateChallengeScreen .roadStageHead small { display: none; }
+.gateChallengeScreen .roadGateList { display: flex; gap: 6px; }
+.gateChallengeScreen .roadGate { min-width: 0; min-height: 38px; flex: 1; padding: 5px 7px; }
+.gateChallengeScreen .roadGate span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gateChallengeScreen .gateScenePanel { grid-template-columns: 92px minmax(0, 1fr) minmax(190px, .42fr); min-height: 112px; padding: 14px 16px; }
+.gateChallengeScreen .gateSceneVisual, .gateChallengeScreen .gateStatusBox { min-height: 84px; }
+.gateChallengeScreen .aiRoutePlanner { padding: 16px 18px; }
+
+@media (max-width: 900px) {
+  .mapWorldRail { width: 170px; }
+  .mapArtwork { right: 182px; width: calc(100% - 182px); }
+  .mapRegionLabels { right: 205px; }
+  .journeyHeader { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .journeyBrand { grid-column: 1; grid-row: 1; padding-right: 0; }
+  .headerUtilities { position: static; grid-column: 2; grid-row: 1; }
+  .journeyNav { grid-column: 1 / -1; grid-row: 2; display: flex; width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; }
+  .journeyNav button { min-width: 140px; flex: 0 0 auto; }
+  .gateChallengeScreen .roadStage { min-height: auto; }
+  .gateChallengeScreen .roadGateList { display: grid; }
+}
+
+@media (max-width: 720px) {
+  .expeditionMap { min-height: 860px; }
+  .journeyHeader { position: sticky; padding: 10px; }
+  .journeyBrand strong { font-size: 15px; }
+  .journeyBrand small { display: none; }
+  .brandSignal { width: 30px; height: 42px; }
+  .accountTrigger { min-height: 36px; padding: 0 8px; }
+  .accountTrigger span { display: none; }
+  .journeyNav button { min-width: 128px; min-height: 40px; }
+  .expeditionMap::before { display: block; }
+  .mapHudTitle { left: 18px; top: 18px; }
+  .mapWorldRail { left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mapWorldRail > div { padding: 10px; }
+  .mapWorldRail strong { font-size: 18px; }
+  .mapArtwork { display: none; }
+  .expeditionMap::after { top: 92px; bottom: 190px; }
+  .expeditionMap::before { top: 82px; bottom: 180px; }
+  .mapFinish { right: 8%; bottom: 178px; }
+  .missionFacts { grid-template-columns: 1fr; }
+  .routePlannerActions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .routeCustomButton, .routeGenerateButton { width: 100%; justify-content: center; }
+  .gateChallengeScreen .gateChallengeHeader { align-items: stretch; flex-direction: column; }
+  .gateChallengeScreen .gateChallengeHeader .ghostButton { width: 100%; }
+  .gateChallengeScreen .gateScenePanel { grid-template-columns: 74px minmax(0, 1fr); }
+  .gateChallengeScreen .gateStatusBox { grid-column: 1 / -1; }
+}
+
+/* Evidence inventory and compact mission log. */
+.backpackHeader, .refillHeader {
+  min-height: 170px;
+  align-items: center;
+  border-color: #cedbd3;
+  background: #fff;
+  color: #17221d;
+  box-shadow: var(--soft-shadow);
+}
+.backpackHeader p, .refillHeader > div:first-child p { color: #5e7166; }
+.backpackShellVisual { position: relative; min-width: 160px; min-height: 126px; display: grid; place-content: center; justify-items: center; gap: 2px; border: 1px solid #1e4c3a; border-radius: 8px; background: #153b2d; color: #ecfff4; box-shadow: 8px 8px 0 #d8e9df; overflow: hidden; }
+.backpackShellVisual svg { color: #6ee29f; }
+.backpackShellVisual strong { position: absolute; right: 22px; top: 17px; font-size: 24px; }
+.backpackShellVisual span { font-size: 9px; color: #a9d5bc; }
+.backpackShellVisual i { position: absolute; bottom: 13px; width: 11px; height: 11px; border-radius: 3px; background: var(--red); }
+.backpackShellVisual i:nth-of-type(1) { left: 28px; }
+.backpackShellVisual i:nth-of-type(2) { left: 47px; background: var(--yellow); }
+.backpackShellVisual i:nth-of-type(3) { left: 66px; background: var(--blue); }
+.evidenceInventory { display: grid; gap: 14px; padding: 20px; border: 1px solid #ccd9d1; border-radius: 8px; background: #fff; box-shadow: 0 10px 28px rgba(31, 55, 42, .07); }
+.inventoryHeading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.inventoryHeading > div { display: grid; gap: 3px; }
+.inventoryHeading span { color: #718077; font-size: 10px; font-weight: 900; }
+.inventoryHeading strong { font-size: 18px; }
+.inventoryShelf { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
+.inventoryItem { min-height: 128px; display: grid; align-content: space-between; gap: 5px; padding: 14px; border: 1px solid #d5dfd9; border-top: 4px solid var(--blue); border-radius: 7px; background: #f8fbf9; }
+.inventoryItem.tone-yellow { border-top-color: var(--yellow); }
+.inventoryItem.tone-green { border-top-color: var(--green); }
+.inventoryItem.tone-red { border-top-color: var(--red); }
+.inventoryItem.tone-violet { border-top-color: #8167df; }
+.inventoryItem > div { display: flex; align-items: center; gap: 7px; color: #465a4f; }
+.inventoryItem > div span { font-size: 11px; font-weight: 900; }
+.inventoryItem strong { font-size: 31px; }
+.inventoryItem small { color: #74837a; font-size: 9px; }
+.inventoryRule { display: flex; align-items: center; gap: 7px; margin: 0; color: #597064; font-size: 10px; }
+.inventoryRule svg { color: var(--green); }
+.evidenceComposer, .evidenceTimeline { border-color: #ccd9d1; background: #fff; color: #17221d; box-shadow: 0 10px 26px rgba(31, 55, 42, .06); }
+.evidenceComposerGrid label > span { color: #52665b; font-weight: 800; }
+.evidenceComposerGrid input, .evidenceComposerGrid textarea, .evidenceComposerGrid select { border-color: #c4d1c9; background: #f8fbf9; color: #17221d; }
+.evidenceComposerGrid input::placeholder, .evidenceComposerGrid textarea::placeholder { color: #829188; }
+.evidenceComposer .switchField { border-color: #cbd7d0; background: #f4f8f5; }
+.evidenceComposer .switchField span { color: #43584c !important; }
+.composerActions > span, .timelineHeading > span { color: #677a6f; }
+.timelineHeading { border-color: #d8e2dc; }
+.evidenceEmpty strong { color: #17221d; }
+.evidenceRecord { border-color: #d5dfd9; background: #f8fbf9; color: #17221d; }
+.evidenceRecordHead > span { background: #e6efea; color: #344a3e; }
+.evidenceRecord > strong { color: #22372b; }
+.evidenceMeta span, .evidenceMeta a { color: #66796e; }
+.evidenceRecord footer { border-color: #dbe4df; }
+.evidenceRecord footer p { color: #6b7c73; }
+.evidenceInlineEdit textarea, .evidenceInlineEdit input { color: #17221d; background: #fff; }
+
+.refillProgress { border-color: #cbd8d0; background: #153b2d; color: #fff; }
+.refillProgress span { color: #acd1bc; }
+.calibrationCompare, .taskExecutionBoard, .calibrationHistoryBoard { border-color: #ccd9d1; background: #fff; color: #17221d; box-shadow: 0 10px 26px rgba(31, 55, 42, .06); }
+.compareLane article { border-color: #d6e0da; background: #f7faf8; color: #17221d; }
+.compareArrow { background: #edf5f0; color: #17221d; }
+.gateChangeList span { border-color: #d6e0da; background: #f7faf8; }
+.missionLogItem { padding: 0; border-color: #d5dfd9; background: #f8fbf9; color: #17221d; overflow: hidden; transition: border-color .2s ease, box-shadow .2s ease; }
+.missionLogItem.expanded { border-color: #85cfa4; box-shadow: 0 10px 24px rgba(32, 111, 65, .08); }
+.taskMissionHeader { width: 100%; display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px; background: transparent; color: #17221d; text-align: left; }
+.taskMissionHeader > div:nth-child(2) { min-width: 0; }
+.taskMissionHeader strong { display: block; margin-top: 3px; font-size: 14px; }
+.taskMissionHeader p { margin: 5px 0 0; color: #6b7b72; font-size: 11px; line-height: 1.5; }
+.missionHeaderMeta { display: flex; align-items: center; gap: 9px; color: #74847a; }
+.missionHeaderMeta span { font-size: 9px; }
+.missionLogItem.expanded .missionHeaderMeta svg { transform: rotate(180deg); }
+.missionLogBody { padding: 0 16px 16px 81px; border-top: 1px solid #dde5e0; }
+.taskStandards p { background: #edf4f0; color: #52665a; }
+.taskStatusControl { border-color: #d3ddd7; background: #edf3ef; }
+.taskStatusControl button { color: #63756a; }
+.taskStatusControl button.active { background: #dbe6df; color: #17221d; }
+.taskStatusControl button.active.success { background: #dff7e9; color: #197345; }
+.taskStatusControl button.active.failed { background: #fde5e5; color: #a7353a; }
+.taskResultField textarea { border-color: #c8d5cd; background: #fff; color: #17221d; }
+.taskEvidenceLinks button { border-color: #d3ddd7; background: #fff; color: #607269; }
+.taskEvidenceLinks button.linked { background: #e5f8ed; color: #176a3e; }
+.recalibrateBar { background: #eaf9f0; color: #17221d; }
+.recalibrateBar span { color: #5f7267; }
+.calibrationHistoryBoard li { background: #f2f6f3; }
+.calibrationHistoryBoard li p { color: #5f7067; }
+
+@media (max-width: 900px) {
+  .inventoryShelf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .backpackHeader, .refillHeader { align-items: stretch; flex-direction: column; }
+  .backpackShellVisual { width: 100%; }
+  .inventoryHeading { align-items: stretch; flex-direction: column; }
+  .inventoryShelf { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inventoryItem:last-child { grid-column: 1 / -1; }
+  .taskMissionHeader { grid-template-columns: 46px minmax(0, 1fr); }
+  .missionHeaderMeta { grid-column: 2; justify-content: space-between; }
+  .missionLogBody { padding: 0 12px 14px; }
+  .taskStandards { grid-template-columns: 1fr; }
+}

@@ -1,4 +1,4 @@
-import { Backpack, CalendarDays, Check, Edit3, Link2, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { BadgeDollarSign, Backpack, CalendarDays, Check, Edit3, Link2, MessageSquareText, MousePointerClick, Plus, Repeat2, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { evidenceSourceLabels, evidenceTypeLabels } from "../lib/labels";
 import type { EvidenceRecord, EvidenceSource, EvidenceType, Project } from "../types";
@@ -27,11 +27,22 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBehavior, setEditingBehavior] = useState("");
   const [editingNote, setEditingNote] = useState("");
+  const [showComposer, setShowComposer] = useState(false);
 
   const sortedRecords = useMemo(
     () => [...records].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
     [records],
   );
+  const inventory = useMemo(() => [
+    { label: "探索记录", types: ["research", "interview", "problem_story", "test_post"] as EvidenceType[], icon: Search, tone: "blue" },
+    { label: "主动意向", types: ["active_interest", "signup"] as EvidenceType[], icon: MessageSquareText, tone: "yellow" },
+    { label: "试用行为", types: ["trial"] as EvidenceType[], icon: MousePointerClick, tone: "green" },
+    { label: "交易信号", types: ["quote", "payment"] as EvidenceType[], icon: BadgeDollarSign, tone: "red" },
+    { label: "复用增长", types: ["repeat", "referral"] as EvidenceType[], icon: Repeat2, tone: "violet" },
+  ].map((item) => ({
+    ...item,
+    count: records.filter((record) => record.reviewStatus === "confirmed" && item.types.includes(record.type)).reduce((total, record) => total + record.quantity, 0),
+  })), [records]);
 
   function addRecord() {
     if (!behavior.trim()) {
@@ -78,11 +89,22 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
   return (
     <div className="evidenceBackpackScreen">
       <header className="backpackHeader">
-        <div><span className="routeEyebrow">证据背包</span><h1>只收集已经发生的行为，不收藏漂亮推测。</h1><p>每条证据都记录来源、对象、时间和可复核性。请不要填写真实姓名、手机号或其他敏感信息。</p></div>
-        <div className="backpackCount"><Backpack size={26} /><strong>{records.length}</strong><span>条记录</span></div>
+        <div><span className="routeEyebrow">证据背包</span><h1>把现实反馈收进背包，项目车才有继续前进的燃料。</h1><p>背包只收已经发生的行为。访谈、主动留言、试用、报价、付款与复用，会按强度成为不同等级的证据。</p></div>
+        <div className="backpackShellVisual" aria-label={`背包中有 ${records.length} 条记录`}><Backpack size={54} /><strong>{records.length}</strong><span>条现实记录</span><i /><i /><i /></div>
       </header>
 
-      <section className="evidenceComposer">
+      <section className="evidenceInventory" aria-label="证据背包分类">
+        <div className="inventoryHeading"><div><span>背包库存</span><strong>{project.name || "当前项目"}</strong></div><button className="primaryButton" type="button" onClick={() => setShowComposer((value) => !value)}><Plus size={16} />{showComposer ? "收起录入" : "装入新证据"}</button></div>
+        <div className="inventoryShelf">
+          {inventory.map((item) => {
+            const Icon = item.icon;
+            return <article key={item.label} className={`inventoryItem tone-${item.tone}`}><div><Icon size={19} /><span>{item.label}</span></div><strong>{item.count}</strong><small>{item.count > 0 ? "已确认行为" : "等待收集"}</small></article>;
+          })}
+        </div>
+        <p className="inventoryRule"><ShieldCheck size={14} />AI推测不会自动进入背包；问卷结果需要你核对摘要后确认计入。</p>
+      </section>
+
+      {showComposer && <section className="evidenceComposer">
         <div className="composerHeading"><div><Plus size={18} /><strong>添加一条现实证据</strong></div><span>链接不会发送给 AI</span></div>
         <div className="evidenceComposerGrid">
           <label><span>证据类型</span><select value={type} onChange={(event) => setType(event.target.value as EvidenceType)}>{Object.entries(evidenceTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -97,7 +119,7 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
         </div>
         {error && <p className="departureValidation">{error}</p>}
         <div className="composerActions"><span>AI 推测与个人假设会保留，但不会提高证据等级。</span><button className="primaryButton" onClick={addRecord} type="button"><Plus size={16} />放入背包</button></div>
-      </section>
+      </section>}
 
       <section className="evidenceTimeline">
         <div className="timelineHeading"><div><span className="routeEyebrow">证据时间线</span><h2>{project.name || "当前项目"}的现实记录</h2></div><span>越接近试用、付款、复用，证据越强</span></div>

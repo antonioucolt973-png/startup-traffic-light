@@ -85,6 +85,7 @@ export function ProjectDeparture({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showCases, setShowCases] = useState(false);
+  const [editingManifest, setEditingManifest] = useState(false);
 
   const luggage = useMemo(() => draft ? [
     { label: "目标用户", value: draft.targetUser, icon: UserRound },
@@ -120,6 +121,7 @@ export function ProjectDeparture({
     setQuestionAnswers(response.data.questions.map(() => ""));
     setSource(response.source);
     setNotice(response.notice || response.data.summary);
+    setEditingManifest(false);
     setPhase("review");
     setLoading(false);
   }
@@ -201,14 +203,33 @@ export function ProjectDeparture({
             exit={{ opacity: 0, y: -12 }}
           >
             <div className="ideaLaunchCopy">
-              <div className="launchSignal" aria-hidden="true"><span /><span /><span /></div>
-              <h1>把一句创业想法，变成一条能执行、能验证的路线。</h1>
-              <p>AI会拆解用户、问题、交易和交付风险，生成现实任务；真实反馈决定项目车下一步开向哪里。</p>
-              <div className="launchRoutePreview" aria-hidden="true">
-                <div className="launchPreviewRoad"><i /><i /><i /><i /></div>
-                <div className="launchPreviewVehicle"><ProjectVehicle size="small" loaded={false} /></div>
-                <span className="previewStart">一句想法</span>
-                <span className="previewFinish">现实证据</span>
+              <div className="launchSignal"><span /><span /><span /><strong>AI创业验证旅程</strong></div>
+              <h1>把想法装上车，去现实里找到答案。</h1>
+              <p>你只需要说清想法。AI负责拆解风险、规划路线和生成任务，真实反馈决定项目车能否继续前进。</p>
+              <div className="launchWorldBoard" aria-label="创业验证旅行地图预览">
+                <div className="worldBoardTopline"><span>当前路线预览</span><strong>从想法到第一条付费证据</strong></div>
+                <svg viewBox="0 0 620 250" preserveAspectRatio="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="launchRoadGlow" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stopColor="#58d9ff" />
+                      <stop offset="0.55" stopColor="#39bdf1" />
+                      <stop offset="1" stopColor="#20c86a" />
+                    </linearGradient>
+                  </defs>
+                  <path className="launchTerrain terrainBack" d="M0 146 C88 70 168 118 244 64 C324 8 390 88 458 48 C520 12 572 46 620 6 L620 250 L0 250 Z" />
+                  <path className="launchTerrain terrainFront" d="M0 198 C86 142 154 190 230 142 C320 84 402 178 484 116 C538 76 584 92 620 70 L620 250 L0 250 Z" />
+                  <path className="launchWorldRoad shadow" d="M54 181 C122 181 120 96 192 96 S266 188 332 188 S408 86 470 86 S530 155 578 135" />
+                  <path className="launchWorldRoad glow" d="M54 181 C122 181 120 96 192 96 S266 188 332 188 S408 86 470 86 S530 155 578 135" />
+                  <path className="launchWorldRoad dash" d="M54 181 C122 181 120 96 192 96 S266 188 332 188 S408 86 470 86 S530 155 578 135" />
+                </svg>
+                <div className="launchLandmark village"><i /><span>用户村</span></div>
+                <div className="launchLandmark forest"><i /><span>需求森林</span></div>
+                <div className="launchLandmark port"><i /><span>付费港口</span></div>
+                <div className="launchLandmark factory"><i /><span>交付工厂</span></div>
+                <motion.div className="launchWorldVehicle" animate={{ x: [0, 14, 0] }} transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}>
+                  <ProjectVehicle size="small" loaded={false} />
+                </motion.div>
+                <div className="worldBoardLegend"><span><i className="red" />风险</span><span><i className="yellow" />验证</span><span><i className="green" />通过</span></div>
               </div>
             </div>
 
@@ -279,33 +300,47 @@ export function ProjectDeparture({
               <div className={`aiSourceMark source-${source}`}><Sparkles size={16} />{source === "ai" ? "AI生成" : "本地稳定拆解"}</div>
             </header>
 
-            <motion.div
-              className="manifestGrid"
-              initial="hidden"
-              animate="visible"
-              variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.055 } } }}
-            >
-              {draftFields.map((field) => (
-                <motion.label
-                  key={field.key}
-                  className={field.multiline ? "wide" : ""}
-                  variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}
+            <div className="manifestSummaryGrid">
+              <article className="manifestSummaryCard primary"><span>项目车</span><strong>{draft.name}</strong><p>{draft.description}</p></article>
+              <article className="manifestSummaryCard"><span>最先服务谁</span><strong>{draft.targetUser}</strong><p>{draft.painPoint}</p></article>
+              <article className="manifestSummaryCard"><span>现实入口</span><strong>{draft.acquisition}</strong><p>用户当前方案：{draft.alternative}</p></article>
+              <article className="manifestSummaryCard warning"><span>本轮最大风险</span><strong>{draft.biggestUncertainty}</strong><p>验证目的地：{destination}</p></article>
+              <article className="manifestSummaryCard"><span>交易与成果</span><strong>{draft.monetization}</strong><p>{draft.existingArtifact || "当前还没有可展示成果"}</p></article>
+              <article className="manifestSummaryCard stage"><span>当前阶段</span><strong>{stageLabels[draft.currentStage]}</strong><p>AI会按这个阶段调整任务强度。</p></article>
+            </div>
+
+            <div className="manifestEditToggle">
+              <div><Edit3 size={17} /><p><strong>发现AI理解有误？</strong><span>只调整错误项，不需要重新填写整份项目资料。</span></p></div>
+              <button className="ghostButton" type="button" onClick={() => setEditingManifest((value) => !value)}>{editingManifest ? "收起调整" : "调整AI理解"}</button>
+            </div>
+
+            <AnimatePresence>
+              {editingManifest && (
+                <motion.div
+                  className="manifestGrid"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
                 >
-                  <span>{field.label}</span>
-                  {field.multiline ? (
-                    <textarea value={String(draft[field.key])} onChange={(event) => updateDraft(field.key, event.target.value)} />
-                  ) : (
-                    <input value={String(draft[field.key])} onChange={(event) => updateDraft(field.key, event.target.value)} />
-                  )}
-                </motion.label>
-              ))}
-              <motion.label variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}>
-                <span>当前阶段</span>
-                <select value={draft.currentStage} onChange={(event) => setDraft({ ...draft, currentStage: event.target.value as AiProjectDraft["currentStage"] })}>
-                  {Object.entries(stageLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-                </select>
-              </motion.label>
-            </motion.div>
+                  {draftFields.map((field) => (
+                    <label key={field.key} className={field.multiline ? "wide" : ""}>
+                      <span>{field.label}</span>
+                      {field.multiline ? (
+                        <textarea value={String(draft[field.key])} onChange={(event) => updateDraft(field.key, event.target.value)} />
+                      ) : (
+                        <input value={String(draft[field.key])} onChange={(event) => updateDraft(field.key, event.target.value)} />
+                      )}
+                    </label>
+                  ))}
+                  <label>
+                    <span>当前阶段</span>
+                    <select value={draft.currentStage} onChange={(event) => setDraft({ ...draft, currentStage: event.target.value as AiProjectDraft["currentStage"] })}>
+                      {Object.entries(stageLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+                    </select>
+                  </label>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {questions.length > 0 && (
               <section className="clarificationPanel">
@@ -360,12 +395,12 @@ export function ProjectDeparture({
                     <motion.article
                       key={item.label}
                       className={`packingLuggage luggage-${index + 1}`}
-                      initial={{ opacity: 0, scale: 0.82, x: compactAnimation ? 0 : "-18vw", y: compactAnimation ? -70 : 0 }}
+                      initial={{ opacity: 0, scale: 0.86, x: 0, y: compactAnimation ? -24 : 18 }}
                       animate={{
                         opacity: reduceMotion ? 1 : [0, 1, 1, 0],
                         scale: reduceMotion ? 1 : [0.82, 1, 1, 0.36],
-                        x: reduceMotion ? 0 : compactAnimation ? [0, 0, 0, 0] : ["-18vw", "-8vw", "-8vw", "18vw"],
-                        y: reduceMotion ? 0 : compactAnimation ? [-70, 0, 0, 150] : [0, 0, 0, 16],
+                        x: reduceMotion ? 0 : compactAnimation ? [0, 0, 0, 0] : [0, 0, 0, "34vw"],
+                        y: reduceMotion ? 0 : compactAnimation ? [-24, 0, 0, 150] : [18, 0, 0, 40],
                       }}
                       transition={{ delay: reduceMotion ? 0 : 0.55 + index * 0.43, duration: reduceMotion ? 0.01 : 2.65, times: [0, 0.24, 0.68, 1] }}
                     >
@@ -381,14 +416,14 @@ export function ProjectDeparture({
                 animate={{ x: reduceMotion ? 0 : compactAnimation ? [0, 0, 0] : [0, 0, "48vw"], y: reduceMotion ? 0 : compactAnimation ? [0, 0, 170] : [0, 0, -22] }}
                 transition={{ duration: reduceMotion ? 0.01 : 5.25, times: [0, 0.78, 1], ease: [0.65, 0, 0.35, 1] }}
               >
-                <motion.div initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: reduceMotion ? 0 : 1.15, duration: 0.5 }}>
+                <motion.div initial={{ scale: 0.94, opacity: 1 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}>
                   <ProjectVehicle size="large" label={draft.name} />
                 </motion.div>
                 <div className="cargoIndicator"><span>装载进度</span><div>{luggage.map((item, index) => <motion.i key={item.label} initial={{ scale: 0.3, opacity: 0.25 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: reduceMotion ? 0 : 2.6 + index * 0.34 }} />)}</div></div>
               </motion.div>
 
               <div className="packingSignal" aria-label="路线已放行"><i /><i /><motion.i initial={{ opacity: 0.25 }} animate={{ opacity: 1, scale: [1, 1.18, 1] }} transition={{ delay: reduceMotion ? 0 : 4.05, duration: 0.8 }} /></div>
-              <motion.div className="packingRoadReveal" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: reduceMotion ? 0 : 3.85, duration: reduceMotion ? 0.01 : 0.9 }}><span /><span /><span /></motion.div>
+              <motion.div className="packingRoadReveal" initial={{ scaleX: reduceMotion ? 1 : .16 }} animate={{ scaleX: 1 }} transition={{ delay: reduceMotion ? 0 : 1.1, duration: reduceMotion ? 0.01 : 2.9 }}><span /><span /><span /></motion.div>
             </div>
             <div className="packingFooter"><span>AI 已完成：拆解项目 · 识别风险 · 规划验证目标</span><button className="packingSkip" type="button" onClick={onReady}>跳过动画<ArrowRight size={16} /></button></div>
           </motion.section>

@@ -52,11 +52,13 @@ export function GateChallenge({
   const [loading, setLoading] = useState<"review" | "redteam" | null>(null);
   const [routeOptions, setRouteOptions] = useState<NonNullable<AiCoachResponse["data"]["routeOptions"]>>([]);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [adjustingPlan, setAdjustingPlan] = useState(false);
   const gate = report.roadtestChecks.find((item) => item.id === activeGate) ?? report.roadtestChecks[0];
   const gateTurns = useMemo(() => turns.filter((turn) => turn.gateId === activeGate).slice(-2), [turns, activeGate]);
   const latestTurn = gateTurns[gateTurns.length - 1];
   const currentQuestion = latestTurn?.nextQuestion || gate.redTeamPrompt;
   const redTeamComplete = gateTurns.length >= 2;
+  const hasPlan = plan.audience.trim().length > 0 && plan.action.trim().length > 0;
 
   function updatePlan(key: keyof GateActionPlan, value: string) {
     onPlanChange({ ...plan, [key]: value });
@@ -110,6 +112,7 @@ export function GateChallenge({
       passCriteria: option.passCriteria,
       stopCriteria: option.stopCriteria,
     });
+    setAdjustingPlan(false);
     setReview(null);
   }
 
@@ -147,7 +150,7 @@ export function GateChallenge({
         <button className="ghostButton" type="button" onClick={onOpenBackpack}>打开证据背包<ArrowRight size={16} /></button>
       </header>
 
-      <RoadMap checks={report.roadtestChecks} activeGate={activeGate} onGateChange={(id) => { onActiveGateChange(id); setReview(null); setAnswer(""); }} />
+      <RoadMap checks={report.roadtestChecks} activeGate={activeGate} onGateChange={(id) => { onActiveGateChange(id); setReview(null); setAnswer(""); setAdjustingPlan(false); }} />
 
       <section className={`gateScenePanel status${gate.status}`}>
         <div className="gateSceneVisual"><ShieldAlert size={30} /><span>{gate.stage === "demand" ? "需求关" : gate.stage === "transaction" ? "交易关" : "交付关"}</span></div>
@@ -157,9 +160,12 @@ export function GateChallenge({
 
       <section className="aiRoutePlanner">
         <div className="aiRouteIntro"><Map size={22} /><div><strong>让AI先拆三条可走路线</strong><p>根据当前路口、已有证据和一人公司的资源限制生成。你仍然可以改写或完全自定义。</p></div></div>
-        <button className="routeGenerateButton" type="button" onClick={generateRoutes} disabled={routeLoading}>
-          {routeLoading ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />}{routeOptions.length ? "重新生成路线" : "生成3条行动路线"}
-        </button>
+        <div className="routePlannerActions">
+          <button className="routeCustomButton" type="button" onClick={() => setAdjustingPlan(true)}><ClipboardPen size={16} />自定义路线</button>
+          <button className="routeGenerateButton" type="button" onClick={generateRoutes} disabled={routeLoading}>
+            {routeLoading ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />}{routeOptions.length ? "重新生成路线" : "生成3条行动路线"}
+          </button>
+        </div>
         {routeOptions.length > 0 && (
           <div className="routeOptionGrid">
             {routeOptions.map((option, index) => (
@@ -175,16 +181,31 @@ export function GateChallenge({
 
       <div className="gateWorkbench">
         <section className="planWorkbench">
-          <div className="workbenchHeading"><div><ClipboardPen size={19} /><strong>我的补证方案</strong></div><span>好计划只能获得路测资格</span></div>
-          <div className="structuredPlanGrid">
-            {planFields.map((field) => (
-              <label key={field.key} className={field.key === "action" ? "wide" : ""}>
-                <span>{field.label}</span>
-                {field.key === "action" ? <textarea value={plan[field.key]} onChange={(event) => updatePlan(field.key, event.target.value)} placeholder={field.placeholder} /> : <input value={plan[field.key]} onChange={(event) => updatePlan(field.key, event.target.value)} placeholder={field.placeholder} />}
-              </label>
-            ))}
-          </div>
-          <div className="planActions"><p>{gate.feedback}</p><button className="primaryButton" type="button" onClick={reviewPlan} disabled={loading !== null}>{loading === "review" ? <RefreshCw className="spin" size={16} /> : <Bot size={16} />}评估方案</button></div>
+          <div className="workbenchHeading"><div><ClipboardPen size={19} /><strong>本路口行动路线</strong></div><span>AI生成，用户确认</span></div>
+          {hasPlan && !adjustingPlan ? (
+            <article className="selectedMissionCard">
+              <header><div><span>已选择路线</span><strong>{plan.action}</strong></div><button type="button" onClick={() => setAdjustingPlan(true)}>调整路线</button></header>
+              <div className="missionFacts">
+                <p><span>去找谁</span><strong>{plan.audience}</strong></p>
+                <p><span>截止时间</span><strong>{plan.deadline}</strong></p>
+                <p><span>通过标准</span><strong>{plan.passCriteria}</strong></p>
+                <p className="stop"><span>停止或调整</span><strong>{plan.stopCriteria}</strong></p>
+              </div>
+            </article>
+          ) : adjustingPlan ? (
+            <div className="structuredPlanGrid routeAdjustForm">
+              {planFields.map((field) => (
+                <label key={field.key} className={field.key === "action" ? "wide" : ""}>
+                  <span>{field.label}</span>
+                  {field.key === "action" ? <textarea value={plan[field.key]} onChange={(event) => updatePlan(field.key, event.target.value)} placeholder={field.placeholder} /> : <input value={plan[field.key]} onChange={(event) => updatePlan(field.key, event.target.value)} placeholder={field.placeholder} />}
+                </label>
+              ))}
+              <button className="routeAdjustDone" type="button" onClick={() => setAdjustingPlan(false)} disabled={!hasPlan}><CheckCircle2 size={16} />完成调整</button>
+            </div>
+          ) : (
+            <div className="planEmptyState"><Bot size={28} /><strong>先让AI给出三条路线</strong><p>你只需选择最符合资源和时间的一条，再进入红队检查。</p><button type="button" onClick={() => setAdjustingPlan(true)}>或者从空白路线开始</button></div>
+          )}
+          <div className="planActions"><p>{gate.feedback}</p><button className="primaryButton" type="button" onClick={reviewPlan} disabled={!hasPlan || loading !== null}>{loading === "review" ? <RefreshCw className="spin" size={16} /> : <Bot size={16} />}让AI评估路线</button></div>
           {review && (
             <article className={`planReview source-${review.source}`}>
               <div><strong>{review.source === "ai" ? "AI 方案评估" : "规则方案评估"}</strong><span>{review.source === "ai" ? "模型建议" : "稳定降级"}</span></div>
@@ -196,7 +217,8 @@ export function GateChallenge({
         </section>
 
         <section className="redTeamConversation">
-          <div className="workbenchHeading"><div><MessageSquareReply size={19} /><strong>红队检查员</strong></div><span>{gateTurns.length}/2 轮</span></div>
+          <div className="redTeamRoomLabel"><ShieldAlert size={15} /><span>PRESSURE TEST ROOM</span></div>
+          <div className="workbenchHeading"><div><MessageSquareReply size={19} /><strong>红队压力测试</strong></div><span>{gateTurns.length}/2 轮</span></div>
           <div className="conversationThread">
             {gateTurns.map((turn) => (
               <div key={turn.id} className="conversationRound">

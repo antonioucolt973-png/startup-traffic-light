@@ -7,6 +7,11 @@ export async function requestAiCoach(input: AiCoachRequest): Promise<AiCoachResp
     return buildFallbackCoachResponse(input, "输入结构不完整，已改用本地规则建议。");
   }
 
+  const endpointEnabled = import.meta.env.PROD || import.meta.env.VITE_AI_ENDPOINT_ENABLED === "true";
+  if (!endpointEnabled) {
+    return buildFallbackCoachResponse(parsed.data, "当前为本地界面测试，已使用稳定规则生成内容。");
+  }
+
   try {
     const response = await fetch("/api/ai/coach", {
       method: "POST",
