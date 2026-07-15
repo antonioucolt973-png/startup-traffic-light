@@ -2270,3 +2270,215 @@ h1, h2, h3, .journeyBrand strong { font-family: Bahnschrift, "Microsoft YaHei", 
   .cockpitVehicleAsset { width: min(330px, 96%); }
   .packingVehicleAsset { width: 230px; }
 }
+
+/* Cockpit accessibility contrast pass */
+:is(
+  .ideaLaunch,
+  .projectManifest,
+  .packingScene,
+  .cycleBriefing,
+  .mapScreen,
+  .gateChallengeScreen,
+  .evidenceBackpackScreen,
+  .nextRouteScreen,
+  .evidenceRefillScreen
+) :is(h1, h2, h3, h4, h5, strong) {
+  color: #f2fcff !important;
+}
+
+:is(
+  .ideaLaunch,
+  .projectManifest,
+  .packingScene,
+  .cycleBriefing,
+  .mapScreen,
+  .gateChallengeScreen,
+  .evidenceBackpackScreen,
+  .nextRouteScreen,
+  .evidenceRefillScreen
+) :is(p, li, dd) {
+  color: #a7c0ca !important;
+}
+
+:is(
+  .ideaLaunch,
+  .projectManifest,
+  .packingScene,
+  .cycleBriefing,
+  .mapScreen,
+  .gateChallengeScreen,
+  .evidenceBackpackScreen,
+  .nextRouteScreen,
+  .evidenceRefillScreen
+) :is(label, dt, small) {
+  color: #8eabb6 !important;
+}
+
+:is(
+  .projectManifest,
+  .gateChallengeScreen,
+  .evidenceBackpackScreen,
+  .nextRouteScreen,
+  .evidenceRefillScreen
+) :is(input, textarea, select) {
+  border-color: rgba(91, 218, 230, .24) !important;
+  background: #040c13 !important;
+  color: #f0fbff !important;
+}
+
+:is(
+  .projectManifest,
+  .gateChallengeScreen,
+  .evidenceBackpackScreen,
+  .nextRouteScreen,
+  .evidenceRefillScreen
+) :is(input, textarea)::placeholder {
+  color: #708e9a !important;
+  opacity: 1;
+}
+
+.routeOptionGrid article h3,
+.routeOptionGrid article dd,
+.routeOptionGrid article p,
+.selectedMissionCard header strong,
+.selectedMissionCard .missionFacts strong,
+.planReview p,
+.planReview li,
+.planEmptyState strong,
+.redTeamConversation .workbenchHeading strong,
+.timelineHeading h2,
+.inventoryHeading strong,
+.taskMissionHeader h3,
+.taskMissionHeader strong,
+.routeDecisionCard strong,
+.cycleAiBrief strong {
+  color: #edfaff !important;
+}
+
+.routeOptionGrid article > span,
+.routeOptionGrid dt,
+.selectedMissionCard header span,
+.selectedMissionCard .missionFacts span,
+.planReview span,
+.redTeamRoomLabel,
+.timelineHeading > span,
+.taskMissionHeader span,
+.routeDecisionCard span {
+  color: #55d9ef !important;
+}
+
+.selectedMissionCard .missionFacts p,
+.taskStandards p,
+.compareLane article,
+.cycleReviewSummary article,
+.cycleAiBrief > div {
+  border: 1px solid rgba(83, 214, 227, .12) !important;
+  background: #081722 !important;
+}
+
+.selectedMissionCard .missionFacts p.stop {
+  border-color: rgba(255, 83, 103, .22) !important;
+  background: rgba(75, 19, 30, .34) !important;
+}
+
+.inspectorBubble,
+.founderBubble,
+.reviewBubble,
+.conversationComplete,
+.planReview,
+.taskCoachResult,
+.calibrationHistoryBoard li {
+  color: #dceff4 !important;
+}
+
+.conversationThread :is(p, span),
+.planReview :is(p, li),
+.taskCoachResult :is(p, li),
+.calibrationHistoryBoard li p {
+  color: #b2c8d0 !important;
+}
+
+.inventoryItem small,
+.evidenceMeta span,
+.evidenceMeta a,
+.evidenceRecord footer p,
+.taskMissionHeader p,
+.taskRouteItem p,
+.cycleReviewSummary p,
+.cycleAiBrief p,
+.cycleLaunchFooter p {
+  color: #91adb8 !important;
+}
+
+.cycleOutcomeChooser button:disabled {
+  opacity: .64;
+}
+
+.gateChallengeScreen .routeOptionGrid article > h3,
+.gateChallengeScreen .selectedMissionCard header > div > strong,
+.gateChallengeScreen .selectedMissionCard .missionFacts > p > strong {
+  color: #f4fdff !important;
+}
+
+.gateChallengeScreen .selectedMissionCard {
+  border-color: rgba(64, 227, 176, .26) !important;
+  border-left-color: #2ce095 !important;
+  background: #07131d !important;
+}
+
+.gateChallengeScreen .selectedMissionCard header button {
+  border-color: rgba(89, 216, 228, .22) !important;
+  background: #0a1c27 !important;
+  color: #cce8ee !important;
+}
+
+.gateChallengeScreen .selectedMissionCard .missionFacts > p {
+  border: 1px solid rgba(83, 214, 227, .14) !important;
+  background: #091a25 !important;
+  color: #dceff4 !important;
+}
+
+.gateChallengeScreen .selectedMissionCard .missionFacts > p.stop {
+  border-color: rgba(255, 83, 103, .24) !important;
+  background: rgba(76, 18, 31, .46) !important;
+}
+
+.gateChallengeScreen .planReview,
+.gateChallengeScreen .planReview.source-ai {
+  border-color: rgba(53, 199, 255, .3) !important;
+  border-left-color: #35c7ff !important;
+  background: #081a25 !important;
+  color: #eafcff !important;
+}
+
+.gateChallengeScreen .planReview.source-ai {
+  border-color: rgba(39, 227, 138, .28) !important;
+  border-left-color: #27e38a !important;
+  background: rgba(8, 36, 37, .96) !important;
+}
+
+.gateChallengeScreen .planReview :is(strong, p, ul, li) {
+  color: #dff4f8 !important;
+}
+
+.nextRouteScreen :is(.growthPulse, .beforeAfterLane article, .growthMetrics > div, .projectChangeLog) {
+  border: 1px solid rgba(80, 216, 228, .13) !important;
+  background: #081722 !important;
+  color: #eafcff !important;
+}
+
+.nextRouteScreen .beforeAfterLane article.after {
+  border-color: rgba(39, 227, 138, .38) !important;
+  background: rgba(8, 36, 31, .96) !important;
+}
+
+.nextRouteScreen :is(.growthPulse strong, .beforeAfterLane h3, .growthMetrics strong, .projectChangeLog > strong) {
+  color: #f1fcff !important;
+}
+
+.nextRouteScreen :is(.growthPulse span, .beforeAfterLane article > span, .beforeAfterLane p, .beforeAfterLane dt, .beforeAfterLane dd, .growthMetrics span, .growthMetrics small, .projectChangeLog > p, .projectChangeLog li > span) {
+  color: #91adb8 !important;
+}
+
+.nextRouteScreen .projectChangeLog del { color: #ff8b98 !important; }
+.nextRouteScreen .projectChangeLog ins { color: #5fe3a2 !important; }
