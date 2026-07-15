@@ -1920,3 +1920,50 @@ body { color: var(--ink); background: var(--asphalt); }
   .missionLogBody { padding: 0 12px 14px; }
   .taskStandards { grid-template-columns: 1fr; }
 }
+
+/* Form-light confirmation: one correction or one story at a time. */
+.manifestSummaryCard > div { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 8px; }
+.manifestSummaryCard > div button { min-height: 28px; padding: 0 8px; border: 1px solid #cbd8d0; border-radius: 5px; background: #fff; color: #496055; font-size: 9px; font-weight: 900; }
+.manifestSummaryCard > div button:hover { border-color: var(--green); color: #176d40; }
+.singleFactEditor { display: grid; gap: 12px; padding: 16px; border: 1px solid #9fdab8; border-left: 4px solid var(--green); border-radius: 7px; background: #f2fbf6; }
+.singleFactEditor > div { display: flex; align-items: center; gap: 10px; }
+.singleFactEditor > div svg { color: var(--green); }
+.singleFactEditor > div p { display: grid; flex: 1; gap: 2px; margin: 0; }
+.singleFactEditor > div p strong { font-size: 13px; }
+.singleFactEditor > div p span { color: #61756a; font-size: 10px; }
+.singleFactEditor > div button { min-height: 32px; padding: 0 10px; border-radius: 5px; background: #17221d; color: #fff; font-size: 10px; font-weight: 900; }
+.singleFactEditor input, .singleFactEditor textarea, .singleFactEditor select { width: 100%; min-height: 46px; padding: 11px 12px; border: 1px solid #b9cdc1; border-radius: 6px; background: #fff; color: #17221d; }
+.singleFactEditor textarea { min-height: 92px; resize: vertical; line-height: 1.55; }
+.clarificationPanel.singleClarification { grid-template-columns: minmax(0, 1fr) auto; }
+.singleClarification > div { grid-column: auto; display: grid; justify-content: start; gap: 4px; }
+.singleClarification > div span { color: #645d3b; line-height: 1.45; }
+.singleClarification label { min-width: 0; }
+.singleClarification > button { align-self: end; }
+.singleClarification:not(.open) > button { align-self: center; }
+
+.routeIdeaComposer { display: grid; gap: 13px; padding: 16px; border: 1px solid #add9c0; border-radius: 7px; background: #f2fbf6; }
+.routeIdeaComposer > div:first-child { display: flex; align-items: flex-start; gap: 9px; }
+.routeIdeaComposer > div:first-child svg { color: var(--green); }
+.routeIdeaComposer p { display: grid; gap: 3px; margin: 0; }
+.routeIdeaComposer p strong { font-size: 14px; }
+.routeIdeaComposer p span { color: #61756a; font-size: 10px; }
+.routeIdeaComposer textarea { width: 100%; min-height: 118px; padding: 13px; border: 1px solid #b9cdc1; border-radius: 6px; background: #fff; color: #17221d; resize: vertical; line-height: 1.6; }
+.routeIdeaComposer > div:last-child { display: flex; justify-content: flex-end; gap: 8px; }
+.routeIdeaComposer > div:last-child > button:first-child { min-height: 40px; padding: 0 13px; border-radius: 6px; background: #e4ede7; color: #40544a; font-weight: 800; }
+
+.simplifiedEvidenceComposer { grid-template-columns: minmax(0, .72fr) minmax(180px, .28fr); }
+.evidenceStoryField textarea { min-height: 132px; font-size: 15px; line-height: 1.65; }
+.evidenceOptionalProof { padding: 12px; border: 1px dashed #bccdc3; border-radius: 6px; background: #f7faf8; }
+.evidenceOptionalProof summary { cursor: pointer; color: #52685c; font-size: 11px; font-weight: 900; }
+.evidenceOptionalProof[open] { display: grid; gap: 10px; }
+.evidenceOptionalProof[open] summary { margin-bottom: 2px; }
+.evidenceOptionalProof label { margin-top: 8px; }
+.evidenceOptionalProof .switchField { background: #fff; }
+
+@media (max-width: 720px) {
+  .clarificationPanel.singleClarification { grid-template-columns: 1fr; }
+  .singleFactEditor > div { align-items: flex-start; flex-wrap: wrap; }
+  .singleFactEditor > div button { margin-left: auto; }
+  .simplifiedEvidenceComposer { grid-template-columns: 1fr; }
+  .simplifiedEvidenceComposer .wide { grid-column: auto; }
+}

@@ -85,7 +85,8 @@ export function ProjectDeparture({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showCases, setShowCases] = useState(false);
-  const [editingManifest, setEditingManifest] = useState(false);
+  const [editingField, setEditingField] = useState<keyof AiProjectDraft | null>(null);
+  const [showClarification, setShowClarification] = useState(false);
 
   const luggage = useMemo(() => draft ? [
     { label: "目标用户", value: draft.targetUser, icon: UserRound },
@@ -121,7 +122,8 @@ export function ProjectDeparture({
     setQuestionAnswers(response.data.questions.map(() => ""));
     setSource(response.source);
     setNotice(response.notice || response.data.summary);
-    setEditingManifest(false);
+    setEditingField(null);
+    setShowClarification(false);
     setPhase("review");
     setLoading(false);
   }
@@ -190,6 +192,10 @@ export function ProjectDeparture({
     setShowCases(false);
     setError("");
   }
+
+  const activeField = editingField === "currentStage"
+    ? { key: "currentStage" as const, label: "当前阶段", multiline: false }
+    : draftFields.find((field) => field.key === editingField);
 
   return (
     <div className="departureScreen departureExperience">
@@ -301,54 +307,40 @@ export function ProjectDeparture({
             </header>
 
             <div className="manifestSummaryGrid">
-              <article className="manifestSummaryCard primary"><span>项目车</span><strong>{draft.name}</strong><p>{draft.description}</p></article>
-              <article className="manifestSummaryCard"><span>最先服务谁</span><strong>{draft.targetUser}</strong><p>{draft.painPoint}</p></article>
-              <article className="manifestSummaryCard"><span>现实入口</span><strong>{draft.acquisition}</strong><p>用户当前方案：{draft.alternative}</p></article>
-              <article className="manifestSummaryCard warning"><span>本轮最大风险</span><strong>{draft.biggestUncertainty}</strong><p>验证目的地：{destination}</p></article>
-              <article className="manifestSummaryCard"><span>交易与成果</span><strong>{draft.monetization}</strong><p>{draft.existingArtifact || "当前还没有可展示成果"}</p></article>
-              <article className="manifestSummaryCard stage"><span>当前阶段</span><strong>{stageLabels[draft.currentStage]}</strong><p>AI会按这个阶段调整任务强度。</p></article>
-            </div>
-
-            <div className="manifestEditToggle">
-              <div><Edit3 size={17} /><p><strong>发现AI理解有误？</strong><span>只调整错误项，不需要重新填写整份项目资料。</span></p></div>
-              <button className="ghostButton" type="button" onClick={() => setEditingManifest((value) => !value)}>{editingManifest ? "收起调整" : "调整AI理解"}</button>
+              <article className="manifestSummaryCard primary"><span>项目车</span><strong>{draft.name}</strong><p>{draft.description}</p><div><button type="button" onClick={() => setEditingField("name")}>改名称</button><button type="button" onClick={() => setEditingField("description")}>改描述</button></div></article>
+              <article className="manifestSummaryCard"><span>最先服务谁</span><strong>{draft.targetUser}</strong><p>{draft.painPoint}</p><div><button type="button" onClick={() => setEditingField("targetUser")}>改用户</button><button type="button" onClick={() => setEditingField("painPoint")}>改问题</button></div></article>
+              <article className="manifestSummaryCard"><span>现实入口</span><strong>{draft.acquisition}</strong><p>用户当前方案：{draft.alternative}</p><div><button type="button" onClick={() => setEditingField("acquisition")}>改入口</button><button type="button" onClick={() => setEditingField("alternative")}>改替代方案</button></div></article>
+              <article className="manifestSummaryCard warning"><span>本轮最大风险</span><strong>{draft.biggestUncertainty}</strong><p>验证目的地：{destination}</p><div><button type="button" onClick={() => setEditingField("biggestUncertainty")}>修改风险</button></div></article>
+              <article className="manifestSummaryCard"><span>交易与成果</span><strong>{draft.monetization}</strong><p>{draft.existingArtifact || "当前还没有可展示成果"}</p><div><button type="button" onClick={() => setEditingField("monetization")}>改付费</button><button type="button" onClick={() => setEditingField("existingArtifact")}>改成果</button></div></article>
+              <article className="manifestSummaryCard stage"><span>当前阶段</span><strong>{stageLabels[draft.currentStage]}</strong><p>AI会按这个阶段调整任务强度。</p><div><button type="button" onClick={() => setEditingField("currentStage")}>修改阶段</button></div></article>
             </div>
 
             <AnimatePresence>
-              {editingManifest && (
-                <motion.div
-                  className="manifestGrid"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                >
-                  {draftFields.map((field) => (
-                    <label key={field.key} className={field.multiline ? "wide" : ""}>
-                      <span>{field.label}</span>
-                      {field.multiline ? (
-                        <textarea value={String(draft[field.key])} onChange={(event) => updateDraft(field.key, event.target.value)} />
-                      ) : (
-                        <input value={String(draft[field.key])} onChange={(event) => updateDraft(field.key, event.target.value)} />
-                      )}
-                    </label>
-                  ))}
-                  <label>
-                    <span>当前阶段</span>
+              {editingField && activeField && (
+                <motion.section className="singleFactEditor" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+                  <div><Edit3 size={17} /><p><strong>只修改：{activeField.label}</strong><span>其余内容保持不变。</span></p><button type="button" onClick={() => setEditingField(null)}>完成</button></div>
+                  {editingField === "currentStage" ? (
                     <select value={draft.currentStage} onChange={(event) => setDraft({ ...draft, currentStage: event.target.value as AiProjectDraft["currentStage"] })}>
                       {Object.entries(stageLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                     </select>
-                  </label>
-                </motion.div>
+                  ) : activeField.multiline ? (
+                    <textarea value={String(draft[editingField])} onChange={(event) => updateDraft(editingField, event.target.value)} autoFocus />
+                  ) : (
+                    <input value={String(draft[editingField])} onChange={(event) => updateDraft(editingField, event.target.value)} autoFocus />
+                  )}
+                </motion.section>
               )}
             </AnimatePresence>
 
-            {questions.length > 0 && (
-              <section className="clarificationPanel">
-                <div><strong>AI还有{questions.length}个可选问题</strong><span>不回答也能继续，补充后路线会更具体。</span></div>
-                {questions.map((question, index) => (
-                  <label key={question}><span>{question}</span><input value={questionAnswers[index] || ""} onChange={(event) => setQuestionAnswers((current) => current.map((value, itemIndex) => itemIndex === index ? event.target.value : value))} /></label>
-                ))}
-                <button type="button" onClick={applyClarifications} disabled={loading}>{loading ? <LoaderCircle className="spin" size={16} /> : <Edit3 size={16} />}补充后重新拆解</button>
+            {questions.length > 0 && !editingField && (
+              <section className={`clarificationPanel singleClarification ${showClarification ? "open" : ""}`}>
+                <div><strong>AI发现一个仍需确认的关键点</strong><span>{questions[0]}</span></div>
+                {!showClarification ? (
+                  <button type="button" onClick={() => setShowClarification(true)}><Edit3 size={16} />补充这个信息</button>
+                ) : (
+                  <><label><span>你的补充</span><input value={questionAnswers[0] || ""} onChange={(event) => setQuestionAnswers((current) => current.map((value, itemIndex) => itemIndex === 0 ? event.target.value : value))} autoFocus /></label>
+                  <button type="button" onClick={applyClarifications} disabled={loading}>{loading ? <LoaderCircle className="spin" size={16} /> : <Edit3 size={16} />}重新拆解</button></>
+                )}
               </section>
             )}
 

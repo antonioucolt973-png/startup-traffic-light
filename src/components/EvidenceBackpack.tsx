@@ -1,7 +1,7 @@
 import { BadgeDollarSign, Backpack, CalendarDays, Check, Edit3, Link2, MessageSquareText, MousePointerClick, Plus, Repeat2, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { evidenceSourceLabels, evidenceTypeLabels } from "../lib/labels";
-import type { EvidenceRecord, EvidenceSource, EvidenceType, Project } from "../types";
+import type { EvidenceRecord, EvidenceType, Project } from "../types";
 
 interface EvidenceBackpackProps {
   project: Project;
@@ -11,16 +11,10 @@ interface EvidenceBackpackProps {
   onUpdate: (record: EvidenceRecord) => void;
 }
 
-const defaultSource: EvidenceSource = "user_behavior";
-
 export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }: EvidenceBackpackProps) {
   const [type, setType] = useState<EvidenceType>("interview");
-  const [occurredAt, setOccurredAt] = useState(() => new Date().toISOString().slice(0, 10));
-  const [actor, setActor] = useState("");
   const [behavior, setBehavior] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [source, setSource] = useState<EvidenceSource>(defaultSource);
-  const [note, setNote] = useState("");
   const [url, setUrl] = useState("");
   const [verifiable, setVerifiable] = useState(false);
   const [error, setError] = useState("");
@@ -53,12 +47,12 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
       id: `${Date.now()}-${type}`,
       projectId: project.id,
       type,
-      occurredAt: occurredAt || new Date().toISOString().slice(0, 10),
-      actor: actor.trim() || "匿名目标用户",
+      occurredAt: new Date().toISOString().slice(0, 10),
+      actor: "匿名外部对象",
       behavior: behavior.trim(),
       quantity: Math.max(1, quantity),
-      source,
-      note: note.trim(),
+      source: inferEvidenceSource(type),
+      note: "",
       url: url.trim(),
       verifiable,
       reviewStatus: "confirmed",
@@ -66,8 +60,6 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
       rawRecordIds: [],
     });
     setBehavior("");
-    setActor("");
-    setNote("");
     setUrl("");
     setQuantity(1);
     setVerifiable(false);
@@ -106,16 +98,15 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
 
       {showComposer && <section className="evidenceComposer">
         <div className="composerHeading"><div><Plus size={18} /><strong>添加一条现实证据</strong></div><span>链接不会发送给 AI</span></div>
-        <div className="evidenceComposerGrid">
+        <div className="evidenceComposerGrid simplifiedEvidenceComposer">
           <label><span>证据类型</span><select value={type} onChange={(event) => setType(event.target.value as EvidenceType)}>{Object.entries(evidenceTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label><span>发生时间</span><input type="date" value={occurredAt} onChange={(event) => setOccurredAt(event.target.value)} /></label>
-          <label><span>对象身份</span><input value={actor} onChange={(event) => setActor(event.target.value)} placeholder="例如：3 位中小电商店主" /></label>
-          <label><span>数量</span><input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
-          <label className="wide"><span>具体行为</span><textarea value={behavior} onChange={(event) => setBehavior(event.target.value)} placeholder="例如：看完 60 秒演示后，有 2 位店主主动提供退货表格并预约下一次沟通" /></label>
-          <label><span>证据来源</span><select value={source} onChange={(event) => setSource(event.target.value as EvidenceSource)}>{Object.entries(evidenceSourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label><span>备注</span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="拒绝原因、原话或补充背景" /></label>
-          <label className="wide"><span>可选链接</span><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="问卷、截图、公开页面或文档链接" /></label>
-          <label className="switchField wide"><input type="checkbox" checked={verifiable} onChange={(event) => setVerifiable(event.target.checked)} /><span>这条证据有记录、截图、链接或第三方可以复核</span></label>
+          <label><span>涉及人数或次数</span><input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
+          <label className="wide evidenceStoryField"><span>实际发生了什么</span><textarea value={behavior} onChange={(event) => setBehavior(event.target.value)} placeholder="例如：演示发给 10 位店主后，2 人主动要求试用，3 人说目前没有这个问题。" /></label>
+          <details className="evidenceOptionalProof wide">
+            <summary>有截图、问卷或链接？可选补充</summary>
+            <label><span>证明材料链接</span><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="公开页面、问卷结果或文档链接" /></label>
+            <label className="switchField"><input type="checkbox" checked={verifiable} onChange={(event) => setVerifiable(event.target.checked)} /><span>已有截图、记录或第三方可以复核</span></label>
+          </details>
         </div>
         {error && <p className="departureValidation">{error}</p>}
         <div className="composerActions"><span>AI 推测与个人假设会保留，但不会提高证据等级。</span><button className="primaryButton" onClick={addRecord} type="button"><Plus size={16} />放入背包</button></div>
@@ -147,4 +138,11 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
       </section>
     </div>
   );
+}
+
+function inferEvidenceSource(type: EvidenceType): EvidenceRecord["source"] {
+  if (type === "research") return "web_research";
+  if (type === "interview" || type === "problem_story") return "user_feedback";
+  if (type === "quote" || type === "payment" || type === "repeat" || type === "referral") return "payment_or_retention";
+  return "user_behavior";
 }

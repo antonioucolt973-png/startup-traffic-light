@@ -23,14 +23,6 @@ interface GateChallengeProps {
   onAddEvidence: (record: EvidenceRecord) => void;
 }
 
-const planFields: Array<{ key: keyof GateActionPlan; label: string; placeholder: string }> = [
-  { key: "audience", label: "找谁", placeholder: "具体人群、名单、社群或已有联系人" },
-  { key: "action", label: "做什么", placeholder: "访谈、发送演示、邀请试用、提出报价等现实行动" },
-  { key: "deadline", label: "什么时候完成", placeholder: "例如：明天下午 6 点前，或 48 小时内" },
-  { key: "passCriteria", label: "什么算通过", placeholder: "例如：10 人中至少 3 人愿意试用" },
-  { key: "stopCriteria", label: "什么情况停止或调整", placeholder: "例如：10 人中少于 2 人承认痛点就暂停" },
-];
-
 export function GateChallenge({
   project,
   report,
@@ -53,17 +45,13 @@ export function GateChallenge({
   const [routeOptions, setRouteOptions] = useState<NonNullable<AiCoachResponse["data"]["routeOptions"]>>([]);
   const [routeLoading, setRouteLoading] = useState(false);
   const [adjustingPlan, setAdjustingPlan] = useState(false);
+  const [customPlanIdea, setCustomPlanIdea] = useState("");
   const gate = report.roadtestChecks.find((item) => item.id === activeGate) ?? report.roadtestChecks[0];
   const gateTurns = useMemo(() => turns.filter((turn) => turn.gateId === activeGate).slice(-2), [turns, activeGate]);
   const latestTurn = gateTurns[gateTurns.length - 1];
   const currentQuestion = latestTurn?.nextQuestion || gate.redTeamPrompt;
   const redTeamComplete = gateTurns.length >= 2;
   const hasPlan = plan.audience.trim().length > 0 && plan.action.trim().length > 0;
-
-  function updatePlan(key: keyof GateActionPlan, value: string) {
-    onPlanChange({ ...plan, [key]: value });
-    setReview(null);
-  }
 
   async function reviewPlan() {
     setLoading("review");
@@ -116,6 +104,24 @@ export function GateChallenge({
     setReview(null);
   }
 
+  function buildCustomRoute() {
+    if (customPlanIdea.trim().length < 6) return;
+    const criteria = gate.stage === "demand"
+      ? { pass: "至少 3 人明确描述相同问题，并愿意继续沟通", stop: "触达 10 人后少于 2 人承认问题存在，则暂停并调整用户或问题" }
+      : gate.stage === "transaction"
+        ? { pass: "至少 2 人主动留资、试用、接受报价或进入下一步", stop: "完成 20 次有效触达仍没有主动行为，则更换入口或价值表达" }
+        : { pass: "至少完成 1 次投入上限内的真实交付，并获得继续使用意向", stop: "连续 2 次交付超出时间或成本上限，则缩小承诺范围" };
+    onPlanChange({
+      audience: project.targetUser || "最接近目标用户的 5 人",
+      action: customPlanIdea.trim(),
+      deadline: "48 小时内",
+      passCriteria: criteria.pass,
+      stopCriteria: criteria.stop,
+    });
+    setReview(null);
+    setAdjustingPlan(false);
+  }
+
   function buildRequest(mode: "plan_review" | "red_team_followup" | "route_options") {
     return {
       mode,
@@ -150,7 +156,7 @@ export function GateChallenge({
         <button className="ghostButton" type="button" onClick={onOpenBackpack}>打开证据背包<ArrowRight size={16} /></button>
       </header>
 
-      <RoadMap checks={report.roadtestChecks} activeGate={activeGate} onGateChange={(id) => { onActiveGateChange(id); setReview(null); setAnswer(""); setAdjustingPlan(false); }} />
+      <RoadMap checks={report.roadtestChecks} activeGate={activeGate} onGateChange={(id) => { onActiveGateChange(id); setReview(null); setAnswer(""); setAdjustingPlan(false); setCustomPlanIdea(""); }} />
 
       <section className={`gateScenePanel status${gate.status}`}>
         <div className="gateSceneVisual"><ShieldAlert size={30} /><span>{gate.stage === "demand" ? "需求关" : gate.stage === "transaction" ? "交易关" : "交付关"}</span></div>
@@ -161,7 +167,7 @@ export function GateChallenge({
       <section className="aiRoutePlanner">
         <div className="aiRouteIntro"><Map size={22} /><div><strong>让AI先拆三条可走路线</strong><p>根据当前路口、已有证据和一人公司的资源限制生成。你仍然可以改写或完全自定义。</p></div></div>
         <div className="routePlannerActions">
-          <button className="routeCustomButton" type="button" onClick={() => setAdjustingPlan(true)}><ClipboardPen size={16} />自定义路线</button>
+          <button className="routeCustomButton" type="button" onClick={() => { setCustomPlanIdea(plan.action); setAdjustingPlan(true); }}><ClipboardPen size={16} />我有自己的做法</button>
           <button className="routeGenerateButton" type="button" onClick={generateRoutes} disabled={routeLoading}>
             {routeLoading ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} />}{routeOptions.length ? "重新生成路线" : "生成3条行动路线"}
           </button>
@@ -184,7 +190,7 @@ export function GateChallenge({
           <div className="workbenchHeading"><div><ClipboardPen size={19} /><strong>本路口行动路线</strong></div><span>AI生成，用户确认</span></div>
           {hasPlan && !adjustingPlan ? (
             <article className="selectedMissionCard">
-              <header><div><span>已选择路线</span><strong>{plan.action}</strong></div><button type="button" onClick={() => setAdjustingPlan(true)}>调整路线</button></header>
+              <header><div><span>已选择路线</span><strong>{plan.action}</strong></div><button type="button" onClick={() => { setCustomPlanIdea(plan.action); setAdjustingPlan(true); }}>重新描述</button></header>
               <div className="missionFacts">
                 <p><span>去找谁</span><strong>{plan.audience}</strong></p>
                 <p><span>截止时间</span><strong>{plan.deadline}</strong></p>
@@ -193,14 +199,10 @@ export function GateChallenge({
               </div>
             </article>
           ) : adjustingPlan ? (
-            <div className="structuredPlanGrid routeAdjustForm">
-              {planFields.map((field) => (
-                <label key={field.key} className={field.key === "action" ? "wide" : ""}>
-                  <span>{field.label}</span>
-                  {field.key === "action" ? <textarea value={plan[field.key]} onChange={(event) => updatePlan(field.key, event.target.value)} placeholder={field.placeholder} /> : <input value={plan[field.key]} onChange={(event) => updatePlan(field.key, event.target.value)} placeholder={field.placeholder} />}
-                </label>
-              ))}
-              <button className="routeAdjustDone" type="button" onClick={() => setAdjustingPlan(false)} disabled={!hasPlan}><CheckCircle2 size={16} />完成调整</button>
+            <div className="routeIdeaComposer">
+              <div><Sparkles size={18} /><p><strong>用一句话说你准备怎么验证</strong><span>目标人群、时间、通过标准和停止条件由系统自动补齐。</span></p></div>
+              <textarea value={customPlanIdea} onChange={(event) => setCustomPlanIdea(event.target.value)} placeholder="例如：明天把演示发给微信群里认识的 10 位服装店主，邀请他们试用并问是否愿意付费。" autoFocus />
+              <div><button type="button" onClick={() => setAdjustingPlan(false)}>取消</button><button className="primaryButton" type="button" onClick={buildCustomRoute} disabled={customPlanIdea.trim().length < 6}><Sparkles size={16} />整理成行动路线</button></div>
             </div>
           ) : (
             <div className="planEmptyState"><Bot size={28} /><strong>先让AI给出三条路线</strong><p>你只需选择最符合资源和时间的一条，再进入红队检查。</p><button type="button" onClick={() => setAdjustingPlan(true)}>或者从空白路线开始</button></div>
