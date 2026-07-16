@@ -9,10 +9,12 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
     "verify:p0": "node --experimental-strip-types scripts/verify-p0.ts",
+    "verify:mcp": "node scripts/verify-mcp.mjs",
     "mcp:server": "node mcp/server.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@supabase/supabase-js": "^2.110.3",
     "@xyflow/react": "^12.11.2",
     "lucide-react": "^0.468.0",

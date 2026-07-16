@@ -13,15 +13,22 @@ npm run dev
 
 ```bash
 npm run verify:p0
+npm run verify:mcp
 npm run build
 ```
 
 ## MCP 服务（比赛提交）
 
-项目包含一个零依赖、可本地启动的 MCP stdio 服务，提供项目拆解、路线建议和证据缺口校准工具：
+项目包含五个结构化 MCP 工具，覆盖想法澄清、路线生成、路口决策、任务拆解和证据复盘，同时支持本地 `stdio` 与公网 Streamable HTTP：
 
 ```bash
 npm run mcp:server
+```
+
+部署后的远程 MCP 地址：
+
+```text
+https://startup-traffic-light.cjmai.top/api/mcp
 ```
 
 详细工具与客户端配置见 [mcp/README.md](mcp/README.md)。MCP 只提供结构化建议；灯号、投入上限和停止条件仍由网页规则引擎决定。
