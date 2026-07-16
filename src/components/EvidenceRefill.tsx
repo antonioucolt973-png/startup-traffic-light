@@ -1,4 +1,4 @@
-import { ArrowRight, Backpack, Check, ChevronDown, CircleX, Link2, RotateCcw, Save, Sparkles, TimerReset } from "lucide-react";
+import { ArrowRight, Backpack, CalendarCheck2, Check, ChevronDown, CircleX, FileAudio, FileImage, FileText, Flame, Link2, RotateCcw, Save, Sparkles, TimerReset } from "lucide-react";
 import { useEffect, useState } from "react";
 import { recommendCycleOutcome } from "../lib/cycleEngine";
 import { requestAiCoach } from "../lib/aiClient";
@@ -51,6 +51,7 @@ export function EvidenceRefill({
   const [selectedOutcome, setSelectedOutcome] = useState<CycleOutcome | null>(null);
   const [aiReview, setAiReview] = useState<AiCoachData["cycleReview"]>();
   const [reviewSource, setReviewSource] = useState<"ai" | "fallback">("fallback");
+  const [checkin, setCheckin] = useState(() => loadCheckin(project.id));
   const newCycleNumber = (activeCycle?.cycleNumber ?? completedCycles.length + 1) + 1;
   const effectiveOutcome = selectedOutcome === "advance" && recommendation !== "advance"
     ? recommendation
@@ -110,11 +111,21 @@ export function EvidenceRefill({
     updateTask(task, { evidenceIds });
   }
 
+  function completeCheckin() {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const next = checkin.lastDate === today
+      ? checkin
+      : { lastDate: today, streak: checkin.lastDate === yesterday ? checkin.streak + 1 : 1 };
+    setCheckin(next);
+    window.localStorage.setItem(`opc-checkin-${project.id}`, JSON.stringify(next));
+  }
+
   return (
     <div className="evidenceRefillScreen">
       <header className="refillHeader">
         <div><span className="routeEyebrow">现实任务日志</span><h1>每完成一段路，就把现实结果带回来。</h1><p>任务不是打卡。记录行为、数量和拒绝原因，再关联证据；重新校准后，你会看到项目使用前后的真实变化。</p></div>
-        <div className="refillProgress"><strong>{completed}</strong><span>完成</span><strong>{failed}</strong><span>未通过</span></div>
+        <div className="refillHeaderActions"><div className="refillProgress"><strong>{completed}</strong><span>完成</span><strong>{failed}</strong><span>未通过</span></div><button className={`checkinButton ${checkin.lastDate === new Date().toISOString().slice(0, 10) ? "checked" : ""}`} type="button" onClick={completeCheckin}><Flame size={16} />{checkin.lastDate === new Date().toISOString().slice(0, 10) ? "今日已确认行动" : "确认今天要推进"}<small>连续 {checkin.streak} 天</small></button></div>
       </header>
 
       <section className="calibrationCompare">
@@ -148,6 +159,7 @@ export function EvidenceRefill({
                 </div>
                 <label className="taskResultField"><span>现实结果</span><textarea value={task.result} onChange={(event) => updateTask(task, { result: event.target.value })} placeholder="写实际行为、数量和拒绝原因，不写‘感觉不错’。" /></label>
                 <div className="taskEvidenceLinks"><span><Link2 size={13} />关联背包证据</span><div>{records.length === 0 ? <small>背包中还没有证据</small> : records.slice(0, 8).map((record) => <button key={record.id} className={task.evidenceIds.includes(record.id) ? "linked" : ""} type="button" onClick={() => toggleEvidence(task, record.id)}>{evidenceTypeLabels[record.type]} · {record.quantity}</button>)}</div></div>
+                <div className="futureEvidenceUploads" aria-label="未来支持的证据提交方式"><span><CalendarCheck2 size={13} />补充材料</span><i><FileImage size={14} />上传截图 · 即将开放</i><i><FileText size={14} />上传文件 · 即将开放</i><i><FileAudio size={14} />上传录音 · 即将开放</i></div>
               </div>}
             </article>
           ))}
@@ -191,6 +203,17 @@ export function EvidenceRefill({
       </section>
     </div>
   );
+}
+
+function loadCheckin(projectId: string) {
+  if (typeof window === "undefined") return { lastDate: "", streak: 0 };
+  try {
+    const raw = window.localStorage.getItem(`opc-checkin-${projectId}`);
+    const parsed = raw ? JSON.parse(raw) as { lastDate?: string; streak?: number } : null;
+    return { lastDate: parsed?.lastDate ?? "", streak: Math.max(0, Number(parsed?.streak) || 0) };
+  } catch {
+    return { lastDate: "", streak: 0 };
+  }
 }
 
 const outcomeLabels: Record<CycleOutcome, { kicker: string; title: string; description: string }> = {

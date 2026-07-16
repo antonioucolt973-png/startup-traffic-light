@@ -22,6 +22,9 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
   const [editingBehavior, setEditingBehavior] = useState("");
   const [editingNote, setEditingNote] = useState("");
   const [showComposer, setShowComposer] = useState(false);
+  const [quickType, setQuickType] = useState<EvidenceType>("interview");
+  const [quickBehavior, setQuickBehavior] = useState("");
+  const [quickError, setQuickError] = useState("");
 
   const sortedRecords = useMemo(
     () => [...records].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
@@ -66,6 +69,31 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
     setError("");
   }
 
+  function addQuickRecord() {
+    if (!quickBehavior.trim()) {
+      setQuickError("先用一句话写清楚今天真实发生了什么。");
+      return;
+    }
+    onAdd({
+      id: `${Date.now()}-${quickType}`,
+      projectId: project.id,
+      type: quickType,
+      occurredAt: new Date().toISOString().slice(0, 10),
+      actor: "匿名外部对象",
+      behavior: quickBehavior.trim(),
+      quantity: 1,
+      source: inferEvidenceSource(quickType),
+      note: "创始人快速记录",
+      url: "",
+      verifiable: false,
+      reviewStatus: "confirmed",
+      origin: "manual",
+      rawRecordIds: [],
+    });
+    setQuickBehavior("");
+    setQuickError("");
+  }
+
   function beginEdit(record: EvidenceRecord) {
     setEditingId(record.id);
     setEditingBehavior(record.behavior);
@@ -94,6 +122,26 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
           })}
         </div>
         <p className="inventoryRule"><ShieldCheck size={14} />AI推测不会自动进入背包；问卷结果需要你核对摘要后确认计入。</p>
+      </section>
+
+      <section className="quickEvidenceCapture" aria-label="快速记录一条现实证据">
+        <div>
+          <span className="routeEyebrow">一分钟记录</span>
+          <strong>今天真实发生了什么？</strong>
+          <p>先记录事实，数量、链接和可复核材料以后再补。</p>
+        </div>
+        <div className="quickEvidenceBody">
+          <div className="quickEvidenceTypes" aria-label="选择证据类型">
+            {([
+              ["interview", "用户访谈"],
+              ["active_interest", "主动反馈"],
+              ["trial", "试用行为"],
+              ["payment", "付款信号"],
+            ] as const).map(([value, label]) => <button className={quickType === value ? "selected" : ""} type="button" key={value} onClick={() => setQuickType(value)}>{label}</button>)}
+          </div>
+          <textarea value={quickBehavior} onChange={(event) => setQuickBehavior(event.target.value)} placeholder="例如：把演示发给一位店主后，她主动问能否预约一次试用。" />
+          <div><span>{quickError}</span><button className="primaryButton" type="button" onClick={addQuickRecord}><Plus size={16} />放入背包</button></div>
+        </div>
       </section>
 
       {showComposer && <section className="evidenceComposer">
