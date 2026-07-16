@@ -19,7 +19,7 @@ npm run build
 
 ## MCP 服务（比赛提交）
 
-项目包含五个结构化 MCP 工具，覆盖想法澄清、路线生成、路口决策、任务拆解和证据复盘，同时支持本地 `stdio` 与公网 Streamable HTTP：
+项目包含五个结构化 MCP 工具，覆盖想法理清、路线生成、路口决策、任务拆解和证据复盘，同时支持本地 `stdio` 与公网 Streamable HTTP：
 
 ```bash
 npm run mcp:server

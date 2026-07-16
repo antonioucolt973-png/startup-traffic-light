@@ -14,15 +14,15 @@ export function registerOpcTools(server) {
   server.registerTool(
     "opc_clarify_and_analyze",
     {
-      title: "澄清并分析创业想法",
-      description: "通过最多三轮澄清，把模糊创业想法整理为目标用户、核心问题、替代方案、已知事实、待验证假设和最大风险。不会预测成功率或决定红黄绿灯。",
+      title: "理清并分析创业想法",
+      description: "通过最多三轮理清，把模糊创业想法整理为目标用户、核心问题、替代方案、已知事实、待验证假设和最大风险。不会预测成功率或决定红黄绿灯。",
       inputSchema: {
         idea: shortText.describe("创业想法的完整描述，至少说明想帮助谁解决什么问题"),
-        round: z.number().int().min(1).max(3).default(1).describe("当前澄清轮次，取值 1 到 3"),
+        round: z.number().int().min(1).max(3).default(1).describe("当前理清轮次，取值 1 到 3"),
         history: z.array(z.object({
           question: z.string().trim().min(1).max(300),
           answer: z.string().trim().min(1).max(800),
-        })).max(6).default([]).describe("之前已经发生的澄清问答"),
+        })).max(6).default([]).describe("之前已经发生的理清问答"),
         goal: optionalText.describe("本轮最希望先确认的目标"),
         resources: optionalText.describe("当前可用时间、预算、人脉或 Demo"),
       },
@@ -53,7 +53,7 @@ export function registerOpcTools(server) {
       title: "生成三条验证路线",
       description: "针对当前最大风险生成三条差异化、低成本、可证伪的现实验证路线。每条路线包含对象、动作、期限、成本、通过标准与停止标准。",
       inputSchema: {
-        projectSummary: shortText.describe("已经澄清过的项目摘要"),
+        projectSummary: shortText.describe("已经理清过的项目摘要"),
         focus: shortText.describe("当前最需要验证的风险或目标"),
         resources: optionalText.describe("可用时间、预算、人脉、渠道和 Demo"),
       },

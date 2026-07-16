@@ -317,14 +317,14 @@ export function ProjectDeparture({
           <motion.section key="clarify" className="clarificationJourney" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             <header className="clarificationJourneyHeader">
               <div>
-                <span className="manifestStep"><BrainCircuit size={16} />AI 澄清中 · 第 {clarificationRound + 1}/3 轮</span>
+                <span className="manifestStep"><BrainCircuit size={16} />AI 理清中 · 第 {clarificationRound + 1}/3 轮</span>
                 <h1>每次只确认一个会影响验证路线的问题。</h1>
                 <p>这不是普通聊天。你的回答会决定项目优先服务谁、验证什么，以及先用什么资源获得外部反馈。</p>
               </div>
               <div className={`aiSourceMark source-${source}`}><Sparkles size={16} />比赛预设分析流程</div>
             </header>
 
-            <ol className="clarificationProgress" aria-label="AI 澄清进度">
+            <ol className="clarificationProgress" aria-label="AI 理清进度">
               {clarificationSteps.map((step, index) => (
                 <li key={step.question} className={index === clarificationRound ? "active" : index < clarificationRound ? "done" : ""}>
                   <span>{index < clarificationRound ? <Check size={15} /> : index + 1}</span><b>关键问题 {index + 1}</b>
@@ -348,7 +348,7 @@ export function ProjectDeparture({
               {error && <p className="ideaError">{error}</p>}
               <footer>
                 <small>已记录 {clarificationAnswers.length} 条回答。AI 不会把这里的回答直接当作真实用户证据。</small>
-                <button className="primaryButton" type="button" onClick={submitClarification}>{clarificationRound === 2 ? <><BrainCircuit size={17} />完成澄清，进入路线总览</> : <><ArrowRight size={17} />确认并进入下一问</>}</button>
+                <button className="primaryButton" type="button" onClick={submitClarification}>{clarificationRound === 2 ? <><BrainCircuit size={17} />完成理清，进入路线总览</> : <><ArrowRight size={17} />确认并进入下一问</>}</button>
               </footer>
             </article>
           </motion.section>

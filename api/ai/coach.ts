@@ -72,7 +72,7 @@ export default async function handler(request: ApiRequest, response: ApiResponse
 
 function systemPrompt(mode: AiCoachRequest["mode"]) {
   const intakeInstruction = mode === "project_intake"
-    ? `当前任务是把用户的一段创业想法拆成 projectDraft。必须输出 name、description、targetUser、painPoint、alternative、acquisition、monetization、currentStage、existingArtifact、biggestUncertainty。信息不足时做保守假设，并把最多3个关键澄清问题放进 questions。`
+    ? `当前任务是把用户的一段创业想法拆成 projectDraft。必须输出 name、description、targetUser、painPoint、alternative、acquisition、monetization、currentStage、existingArtifact、biggestUncertainty。信息不足时做保守假设，并把最多3个关键理清问题放进 questions。`
     : mode === "route_options"
       ? "当前任务是生成3条差异明确、低成本、可证伪的 routeOptions。每条必须包含对象、行动、期限、通过和停止标准。"
       : mode === "survey_generation"
