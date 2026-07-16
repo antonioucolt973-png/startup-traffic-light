@@ -88,6 +88,8 @@ export function ProjectDeparture({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showCases, setShowCases] = useState(false);
+  const [showGuidedInput, setShowGuidedInput] = useState(false);
+  const [guidedIdea, setGuidedIdea] = useState({ user: "", problem: "", method: "", outcome: "", resources: "" });
   const [editingField, setEditingField] = useState<keyof AiProjectDraft | null>(null);
   const [showClarification, setShowClarification] = useState(false);
 
@@ -104,14 +106,15 @@ export function ProjectDeparture({
     return () => window.clearTimeout(timer);
   }, [draft, onReady, phase, reduceMotion]);
 
-  async function analyzeIdea(extraContext = "") {
-    if (idea.trim().length < 8) {
+  async function analyzeIdea(extraContext = "", suppliedIdea = idea) {
+    const normalizedIdea = suppliedIdea.trim();
+    if (normalizedIdea.length < 8) {
       setError("请至少用一句完整的话描述你想做什么、帮助谁或解决什么问题。");
       return;
     }
     setError("");
     setLoading(true);
-    const request = buildIntakeRequest(`${idea.trim()}\n本轮希望：${destination}${extraContext}`);
+    const request = buildIntakeRequest(`${normalizedIdea}\n本轮希望：${destination}${extraContext}`);
     const response = await requestAiCoach(request);
     const fallback = buildFallbackCoachResponse(request);
     const nextDraft = response.data.projectDraft ?? fallback.data.projectDraft;
@@ -161,6 +164,13 @@ export function ProjectDeparture({
       .map((question, index) => questionAnswers[index]?.trim() ? `\n${question}\n回答：${questionAnswers[index].trim()}` : "")
       .join("");
     void analyzeIdea(context);
+  }
+
+  function analyzeGuidedIdea() {
+    const normalized = `我想帮${guidedIdea.user || "一类具体用户"}解决${guidedIdea.problem || "一个反复出现的问题"}，通过${guidedIdea.method || "一个更低成本的方式"}，让他们可以${guidedIdea.outcome || "更快获得明确结果"}${guidedIdea.resources ? `。我目前能使用的资源是：${guidedIdea.resources}` : ""}。`;
+    setIdea(normalized);
+    setShowGuidedInput(false);
+    void analyzeIdea("", normalized);
   }
 
   function confirmAndPack() {
@@ -264,26 +274,39 @@ export function ProjectDeparture({
             </div>
 
             <div className="ideaConsole">
-              <label className="destinationField">
-                <span>我想把这个项目先带到</span>
-                <select value={destination} onChange={(event) => setDestination(event.target.value as typeof destination)}>
-                  {destinations.map((item) => <option value={item} key={item}>{item}</option>)}
-                </select>
-              </label>
               <label className="ideaField">
-                <span>我的想法是</span>
+                <span>我想做一个</span>
                 <textarea
                   value={idea}
                   onChange={(event) => setIdea(event.target.value)}
-                  placeholder="例如：我想做一个AI试衣助手，帮助经常网购但不确定上身效果的年轻女性，减少买错和退货。"
-                  autoFocus
+                  placeholder="用一句话说清你的想法，例如：帮网购买衣服的年轻女性预览上身效果，减少买错和退货。"
                 />
               </label>
+              <div className="departureGoalRow" aria-label="本轮优先目标">
+                <span>这一轮我最想先</span>
+                <div>{destinations.map((item) => <button className={destination === item ? "selected" : ""} type="button" key={item} onClick={() => setDestination(item)}>{item}</button>)}</div>
+              </div>
+              <button className="guidedInputToggle" type="button" onClick={() => setShowGuidedInput((value) => !value)} aria-expanded={showGuidedInput}>
+                <Compass size={16} />不知道怎么写？用引导描述
+              </button>
+              <AnimatePresence initial={false}>
+                {showGuidedInput && (
+                  <motion.section className="guidedIdeaBuilder" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
+                    <p>不需要全部填写，写出你现在最确定的部分即可。</p>
+                    <label>我想帮<input value={guidedIdea.user} onChange={(event) => setGuidedIdea((current) => ({ ...current, user: event.target.value }))} placeholder="谁" /></label>
+                    <label>解决<input value={guidedIdea.problem} onChange={(event) => setGuidedIdea((current) => ({ ...current, problem: event.target.value }))} placeholder="什么问题" /></label>
+                    <label>通过<input value={guidedIdea.method} onChange={(event) => setGuidedIdea((current) => ({ ...current, method: event.target.value }))} placeholder="什么方式" /></label>
+                    <label>让他们可以<input value={guidedIdea.outcome} onChange={(event) => setGuidedIdea((current) => ({ ...current, outcome: event.target.value }))} placeholder="得到什么结果" /></label>
+                    <label className="guidedResource">我目前有的资源<input value={guidedIdea.resources} onChange={(event) => setGuidedIdea((current) => ({ ...current, resources: event.target.value }))} placeholder="选填，例如：5 位店主朋友、设计能力、一个现成 Demo" /></label>
+                    <button className="secondaryButton" type="button" onClick={analyzeGuidedIdea}>用这些信息让 AI 理清</button>
+                  </motion.section>
+                )}
+              </AnimatePresence>
               {error && <p className="ideaError">{error}</p>}
               <div className="ideaActions">
                 <button className="primaryButton launchButton" type="button" onClick={() => void analyzeIdea()} disabled={loading}>
                   {loading ? <LoaderCircle className="spin" size={18} /> : <Sparkles size={18} />}
-                  {loading ? "AI正在拆解项目" : "让AI规划路线"}
+                  {loading ? "AI正在拆解项目" : "让 AI 帮我理清"}
                 </button>
                 <button className="guestButton" type="button" onClick={() => onLoadExample(0)}>
                   <CarFront size={17} />我是游客，直接体验

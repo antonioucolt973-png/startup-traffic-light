@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Backpack, ClipboardCheck, Flag, Map, RotateCcw, Route, Sparkles } from "lucide-react";
+import { Backpack, CarFront, ClipboardCheck, Flag, Flame, LayoutGrid, Map, RotateCcw, Route, Sparkles } from "lucide-react";
 import { EvidenceBackpack } from "./components/EvidenceBackpack";
 import { EvidenceRefill } from "./components/EvidenceRefill";
 import { GateChallenge } from "./components/GateChallenge";
@@ -8,6 +8,7 @@ import { JourneyStatusBar } from "./components/JourneyStatusBar";
 import { NextRoute } from "./components/NextRoute";
 import { ProjectDeparture } from "./components/ProjectDeparture";
 import { AccountMenu } from "./components/AccountMenu";
+import { ProjectVehicle } from "./components/ProjectVehicle";
 import { exampleCases } from "./data/examples";
 import {
   buildReport,
@@ -245,33 +246,47 @@ export default function App() {
           <span className="brandSignal" aria-hidden="true"><i /><i /><i /></span>
           <span><strong>OPC创业红绿灯</strong><small>AI验证陪跑系统</small></span>
         </button>
-        <nav className="journeyNav" aria-label="创业校准流程">
-          {views.map((view, index) => {
-            const Icon = view.icon;
-            return (
-              <button key={view.id} className={activeView === view.id ? "active" : ""} type="button" onClick={() => navigate(view.id)}>
-                <span>{String(index + 1).padStart(2, "0")}</span><Icon size={16} />{view.label}
-              </button>
-            );
-          })}
-        </nav>
         <div className="headerUtilities">
           <button className="headerProject" type="button" onClick={() => navigate("departure")}>
-            <Sparkles size={15} /><span>{workspace.project.name || "未命名项目"}</span>
+            <Sparkles size={15} /><span>{workspace.project.name || "当前项目"}</span>
           </button>
+          <button className="headerProjects" type="button" title="项目列表将在账号保存上线后开放"><LayoutGrid size={15} />我的项目</button>
           <AccountMenu
             session={cloudSession}
             syncState={syncState}
             onRequestSignIn={requestEmailSignIn}
             onSignOut={signOutCloud}
           />
+          <button className="proEntry" type="button" title="Pro 能力入口，暂不收费"><Sparkles size={15} />Pro</button>
         </div>
       </header>
 
-      {activeView !== "departure" && <JourneyStatusBar project={workspace.project} report={report} activeCycle={activeCycle} />}
+      <div className="journeyAppShell">
+        <aside className="journeySidebar" aria-label="创业旅程导航">
+          <div className="sidebarHeading"><span>创业旅程</span><strong>第 {activeCycle?.cycleNumber ?? 1} 轮</strong></div>
+          <nav className="journeyNav" aria-label="创业校准流程">
+            {views.map((view, index) => {
+              const Icon = view.icon;
+              return (
+                <button key={view.id} className={activeView === view.id ? "active" : ""} type="button" onClick={() => navigate(view.id)}>
+                  <span>{String(index + 1).padStart(2, "0")}</span><Icon size={17} /><b>{view.label}</b>
+                </button>
+              );
+            })}
+          </nav>
+          <article className="sidebarVehicle">
+            <div><span>项目车状态</span><strong>{workspace.project.name || "等待装载想法"}</strong></div>
+            <ProjectVehicle size="small" loaded={Boolean(workspace.project.description)} />
+            <small>{workspace.project.description ? "已装载，等待现实反馈" : "输入一句想法即可启程"}</small>
+          </article>
+          <article className="sidebarEnergy">
+            <Flame size={17} /><div><span>行动能量</span><strong>{Math.min(100, 20 + workspace.tasks.filter((task) => task.status === "completed").length * 15 + workspace.evidenceRecords.length * 5)}</strong></div><em>/100</em>
+          </article>
+          <button className="sidebarGarage" type="button" title="车辆成长与车库将在后续版本开放"><CarFront size={16} />项目车库 · 即将开放</button>
+        </aside>
 
-      <div className={`journeyWorkspace view-${activeView}`}>
-        <section className="journeyMain">
+        <div className={`journeyWorkspace view-${activeView}`}>
+          <section className="journeyMain">
           {activeView === "departure" && (
             <ProjectDeparture
               project={workspace.project}
@@ -356,8 +371,16 @@ export default function App() {
               saveState={saveState}
             />
           )}
-        </section>
+          </section>
+        </div>
 
+        <aside className="journeyInsightRail" aria-label="项目实时状态">
+          <JourneyStatusBar project={workspace.project} report={report} activeCycle={activeCycle} />
+          <article className="aiPromptCard">
+            <Sparkles size={17} />
+            <div><span>AI 陪跑提示</span><strong>{report.nextActions[0] || "先输入一句想法，让 AI 帮你拆成可行动的路线。"}</strong></div>
+          </article>
+        </aside>
       </div>
     </main>
   );

@@ -2482,3 +2482,191 @@ h1, h2, h3, .journeyBrand strong { font-family: Bahnschrift, "Microsoft YaHei", 
 
 .nextRouteScreen .projectChangeLog del { color: #ff8b98 !important; }
 .nextRouteScreen .projectChangeLog ins { color: #5fe3a2 !important; }
+
+/* Bright consulting workspace: the visual layer intentionally overrides the retired cockpit skin. */
+:root {
+  --ink: #17242b;
+  --muted: #60737c;
+  --canvas: #f4f7f5;
+  --surface: #ffffff;
+  --line: #dbe5e1;
+  --orange: #f28c28;
+  --orange-soft: #fff0df;
+  --blue: #2877d4;
+  --blue-soft: #eaf3ff;
+  --green: #21b66f;
+  --green-soft: #e9f8ef;
+  --yellow: #efb728;
+  --red: #dc5a52;
+  --shadow: 0 12px 30px rgba(35, 57, 49, .08);
+}
+
+body { background: var(--canvas) !important; color: var(--ink) !important; }
+.journeyApp { min-height: 100vh; overflow-x: hidden; background: radial-gradient(circle at 85% 4%, rgba(255, 207, 129, .2), transparent 25%), var(--canvas) !important; color: var(--ink) !important; }
+.journeyApp::before, .journeyApp::after { display: none !important; }
+.departureScreen { min-width: 0; background: transparent !important; }
+.journeyHeader {
+  position: sticky !important; top: 0; z-index: 30; min-height: 72px; grid-template-columns: minmax(220px, 1fr) auto !important;
+  padding: 11px 24px !important; border-bottom: 1px solid var(--line) !important; background: rgba(255, 255, 255, .94) !important;
+  box-shadow: 0 3px 14px rgba(35, 57, 49, .05) !important; backdrop-filter: blur(18px);
+}
+.journeyBrand { color: var(--ink) !important; }
+.journeyBrand strong { color: var(--ink) !important; }
+.journeyBrand small { color: var(--muted) !important; }
+.brandSignal { background: #17242b !important; border-color: #17242b !important; box-shadow: none !important; }
+.headerUtilities { gap: 8px !important; }
+.headerProject, .headerProjects, .proEntry {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 12px; border: 1px solid var(--line) !important;
+  border-radius: 7px !important; background: #fff !important; color: #31464e !important; font-size: 13px; font-weight: 800;
+}
+.headerProject { max-width: 220px; color: #176fae !important; }
+.headerProject span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proEntry { border-color: #f3cb79 !important; background: #fffaf0 !important; color: #b56b10 !important; }
+
+.journeyAppShell { width: min(1600px, 100%); margin: 0 auto; display: grid; grid-template-columns: 224px minmax(0, 1fr) 248px; gap: 20px; align-items: start; padding: 22px 24px 48px; }
+.journeySidebar, .journeyInsightRail { position: sticky; top: 94px; }
+.journeySidebar { display: grid; gap: 10px; padding: 16px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, .9); box-shadow: 0 8px 24px rgba(35, 57, 49, .04); }
+.sidebarHeading { display: flex; align-items: baseline; justify-content: space-between; padding: 0 7px 8px; border-bottom: 1px solid #edf1ef; }
+.sidebarHeading span { color: var(--muted); font-size: 11px; font-weight: 800; }
+.sidebarHeading strong { color: var(--orange); font-size: 13px; }
+.journeyNav { display: grid !important; grid-template-columns: 1fr !important; gap: 5px; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.journeyNav button { min-height: 42px !important; display: grid !important; grid-template-columns: 25px 20px minmax(0, 1fr); align-items: center; gap: 8px; padding: 8px 9px !important; border: 0 !important; border-radius: 7px !important; background: transparent !important; color: #50646b !important; text-align: left; font-size: 13px; }
+.journeyNav button > span { color: #9aa8aa !important; font-size: 10px !important; }
+.journeyNav button b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.journeyNav button:hover { background: #f2f6f3 !important; color: var(--ink) !important; }
+.journeyNav button.active { background: var(--green-soft) !important; color: #0b7b48 !important; box-shadow: inset 3px 0 0 var(--green) !important; }
+.journeyNav button.active > span { color: var(--green) !important; }
+.sidebarVehicle { display: grid; gap: 5px; margin-top: 8px; padding: 12px; border: 1px solid #d9e9df; border-radius: 8px; background: linear-gradient(145deg, #f4fbf6, #fff); overflow: hidden; }
+.sidebarVehicle > div:first-child { display: grid; gap: 3px; }
+.sidebarVehicle span, .sidebarVehicle small, .sidebarEnergy span { color: var(--muted) !important; font-size: 10px; }
+.sidebarVehicle strong { color: var(--ink) !important; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebarVehicle .projectVehicle { justify-self: center; margin: 4px 0; transform: scale(.9); transform-origin: center; }
+.sidebarEnergy { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 8px; background: var(--orange-soft); color: var(--orange); }
+.sidebarEnergy > div { display: grid; gap: 1px; }
+.sidebarEnergy strong { color: #9a5207 !important; font-size: 15px; }
+.sidebarEnergy em { margin-left: auto; color: #b8752b; font-size: 10px; font-style: normal; }
+.sidebarGarage { display: flex; align-items: center; gap: 7px; padding: 9px; border: 1px dashed #cbd8d2; border-radius: 7px; background: #fff; color: #778980; font-size: 11px; }
+
+.journeyWorkspace, .journeyWorkspace.view-departure { width: auto !important; min-width: 0; display: block !important; padding: 0 !important; }
+.journeyMain { min-width: 0; }
+.journeyInsightRail { display: grid; gap: 12px; }
+.journeyInsightRail .journeyStatusBar { width: auto !important; display: grid !important; gap: 9px; padding: 12px !important; border: 1px solid var(--line) !important; border-radius: 10px !important; background: #fff !important; box-shadow: var(--shadow) !important; }
+.journeyInsightRail .statusProject, .journeyInsightRail .statusDecision, .journeyInsightRail .statusMetric, .journeyInsightRail .statusBudget, .journeyInsightRail .statusSaved { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 10px !important; border: 1px solid #edf1ef !important; border-radius: 7px !important; background: #fbfcfb !important; }
+.journeyInsightRail .statusProject { grid-template-columns: auto minmax(0, 1fr) !important; }
+.journeyInsightRail .statusProject .projectVehicle { transform: scale(.65); transform-origin: left center; width: 42px; }
+.journeyInsightRail .statusDecision { background: #fff9e9 !important; border-color: #f4dc9c !important; }
+.journeyInsightRail .statusMetric { grid-template-columns: 19px minmax(0, 1fr) !important; }
+.journeyInsightRail .statusMetric .statusMeter { grid-column: 1 / -1; }
+.journeyInsightRail .statusMetric.compact { display: none !important; }
+.journeyInsightRail .statusBudget { grid-template-columns: 1fr 1fr !important; }
+.journeyInsightRail .statusBudget > span { grid-column: 1 / -1; }
+.journeyInsightRail .statusSaved { display: none !important; }
+.journeyInsightRail .statusProject strong, .journeyInsightRail .statusDecision strong, .journeyInsightRail .statusMetric strong, .journeyInsightRail .statusBudget strong { color: var(--ink) !important; font-size: 16px !important; }
+.journeyInsightRail :is(span, small, p) { color: var(--muted) !important; }
+.aiPromptCard { display: flex; gap: 9px; padding: 13px; border: 1px solid #cfe2fb; border-radius: 9px; background: var(--blue-soft); color: var(--blue); }
+.aiPromptCard div { display: grid; gap: 4px; }
+.aiPromptCard span { color: #47729f; font-size: 10px; font-weight: 800; }
+.aiPromptCard strong { color: #25547f; font-size: 12px; line-height: 1.5; }
+
+.journeyApp :is(.ideaLaunch, .projectManifest, .packingScene, .cycleBriefing, .mapScreen, .gateChallengeScreen, .evidenceBackpackScreen, .nextRouteScreen, .evidenceRefillScreen) {
+  border: 1px solid var(--line) !important; border-radius: 10px !important; background: var(--surface) !important; box-shadow: var(--shadow) !important; color: var(--ink) !important;
+}
+.journeyApp :is(.ideaLaunch, .projectManifest, .packingScene, .cycleBriefing, .mapScreen, .gateChallengeScreen, .evidenceBackpackScreen, .nextRouteScreen, .evidenceRefillScreen) :is(h1, h2, h3, h4, h5, strong) { color: var(--ink) !important; text-shadow: none !important; }
+.journeyApp :is(.ideaLaunch, .projectManifest, .packingScene, .cycleBriefing, .mapScreen, .gateChallengeScreen, .evidenceBackpackScreen, .nextRouteScreen, .evidenceRefillScreen) :is(p, li, dd) { color: var(--muted) !important; }
+.journeyApp :is(.ideaLaunch, .projectManifest, .packingScene, .cycleBriefing, .mapScreen, .gateChallengeScreen, .evidenceBackpackScreen, .nextRouteScreen, .evidenceRefillScreen) :is(label, dt, small) { color: #60737c !important; }
+.journeyApp :is(input, textarea, select) { border-color: #cad8d1 !important; background: #fff !important; color: var(--ink) !important; box-shadow: none !important; }
+.journeyApp :is(input, textarea)::placeholder { color: #95a39e !important; }
+.journeyApp :is(.primaryButton, .launchButton) { border-radius: 7px !important; background: var(--orange) !important; color: #fff !important; box-shadow: 0 7px 14px rgba(242, 140, 40, .2) !important; }
+.journeyApp :is(.ghostButton, .guestButton, .secondaryButton) { border-color: #cbd8d2 !important; border-radius: 7px !important; background: #fff !important; color: #40565b !important; }
+.journeyApp :is(.primaryButton, .ghostButton, .guestButton, .secondaryButton):hover { transform: translateY(-1px); }
+
+.ideaLaunch { min-height: auto !important; display: grid !important; grid-template-columns: minmax(0, 1.05fr) minmax(340px, .95fr); gap: clamp(28px, 4vw, 68px); padding: clamp(28px, 4vw, 60px) !important; background: linear-gradient(120deg, #ffffff 0%, #f8fbf9 68%, #edf8f1 100%) !important; }
+.ideaLaunch::before { display: none !important; }
+.departureExperience, .departureExperience .ideaLaunch, .departureExperience .ideaLaunchCopy, .departureExperience .ideaConsole, .departureExperience .caseLibraryBar { opacity: 1 !important; }
+.ideaLaunchCopy h1 { max-width: 650px; color: #173029 !important; font-size: clamp(38px, 4.4vw, 62px) !important; line-height: 1.08 !important; }
+.ideaLaunchCopy > p { max-width: 600px; color: #60737c !important; font-size: 16px !important; }
+.launchSignal strong { color: #238c58 !important; }
+.launchWorldBoard { border: 1px solid #cde2d5 !important; border-radius: 10px !important; background: linear-gradient(135deg, #e9f5ec, #fdfdf9) !important; box-shadow: none !important; }
+.worldBoardTopline span, .worldBoardTopline strong, .worldBoardLegend span { color: #3f6251 !important; }
+.launchTerrain.terrainBack { fill: #d6ead9 !important; }
+.launchTerrain.terrainFront { fill: #eff7ed !important; }
+.launchWorldRoad.shadow { stroke: #c9d9cc !important; }
+.launchWorldRoad.glow { stroke: var(--orange) !important; opacity: .42; }
+.launchWorldRoad.dash { stroke: #fff !important; }
+.launchLandmark { color: #365a47 !important; }
+.ideaConsole { align-self: center; display: grid; gap: 14px; padding: 24px !important; border: 1px solid #ceded3 !important; border-top: 4px solid var(--orange) !important; border-radius: 10px !important; background: #fff !important; box-shadow: 9px 10px 0 #e3eee6 !important; }
+.ideaConsole label > span { color: #334d42 !important; font-size: 14px; font-weight: 900; }
+.ideaConsole textarea { min-height: 140px !important; font-size: 16px !important; line-height: 1.65; }
+.departureGoalRow { display: grid; gap: 8px; }
+.departureGoalRow > span { color: #60737c; font-size: 12px; font-weight: 800; }
+.departureGoalRow > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.departureGoalRow button { padding: 7px 9px; border: 1px solid #d7e2dc; border-radius: 999px; background: #fff; color: #4f6760; font-size: 11px; }
+.departureGoalRow button.selected { border-color: #f5c27b; background: var(--orange-soft); color: #a45c09; font-weight: 800; }
+.guidedInputToggle { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: #267eae; font-size: 12px; font-weight: 800; }
+.guidedIdeaBuilder { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; overflow: hidden; padding: 14px; border: 1px solid #cfe1f4; border-radius: 8px; background: #f7fbff; }
+.guidedIdeaBuilder > p, .guidedIdeaBuilder .guidedResource, .guidedIdeaBuilder .secondaryButton { grid-column: 1 / -1; }
+.guidedIdeaBuilder p { margin: 0; color: #52769b !important; font-size: 12px; }
+.guidedIdeaBuilder label { display: grid; gap: 5px; color: #385a75 !important; font-size: 12px; font-weight: 800; }
+.guidedIdeaBuilder input { min-width: 0; min-height: 36px; padding: 0 9px; font-size: 13px; }
+.guidedIdeaBuilder .secondaryButton { justify-self: end; min-height: 36px; padding: 0 12px; border-color: #a8cdee !important; background: #fff !important; color: #23699c !important; }
+.caseLibraryBar { grid-template-columns: 1fr auto !important; gap: 10px; margin-top: 28px; padding: 14px 0 0 !important; border-top: 1px solid #dfe8e2 !important; background: transparent !important; }
+.caseQuickList { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 8px; }
+.caseQuickList button, .caseLibraryToggle { border-color: #d0ddd6 !important; border-radius: 6px !important; background: #fff !important; color: #405a50 !important; }
+.caseLibraryDrawer { border-color: #d7e2dc !important; border-radius: 8px !important; background: #fff !important; }
+
+.projectManifest { padding: clamp(26px, 3.5vw, 48px) !important; }
+.manifestSummaryCard, .singleFactEditor, .clarificationPanel, .routeIdeaComposer { border-color: #dbe5e1 !important; background: #fff !important; color: var(--ink) !important; box-shadow: none !important; }
+.manifestSummaryCard.primary { border-top: 3px solid var(--orange) !important; }
+.manifestSummaryCard.warning { border-top: 3px solid var(--yellow) !important; }
+.manifestSummaryCard.stage { border-top: 3px solid var(--green) !important; }
+
+.journeyApp :is(.mapScreen, .gateChallengeScreen, .evidenceBackpackScreen, .nextRouteScreen, .evidenceRefillScreen) :is(.gateScenePanel, .aiRoutePlanner, .routeOptionGrid article, .selectedMissionCard, .planEmptyState, .evidenceInventory, .inventoryItem, .evidenceRecord, .routeDecisionCard, .taskRouteItem, .missionLogItem, .compareLane article, .calibrationHistoryBoard li) { border-color: #dbe5e1 !important; background: #fff !important; color: var(--ink) !important; box-shadow: none !important; }
+.journeyApp :is(.mapScreen, .gateChallengeScreen, .evidenceBackpackScreen, .nextRouteScreen, .evidenceRefillScreen) :is(.gateScenePanel, .aiRoutePlanner, .routeOptionGrid article, .selectedMissionCard, .planEmptyState, .evidenceInventory, .inventoryItem, .evidenceRecord, .routeDecisionCard, .taskRouteItem, .missionLogItem, .compareLane article, .calibrationHistoryBoard li) :is(p, li, dd, small, span) { color: var(--muted) !important; }
+.journeyApp .redTeamPanel { border-color: #512f34 !important; background: #1f2228 !important; box-shadow: none !important; }
+.journeyApp .redTeamPanel :is(h1, h2, h3, h4, strong) { color: #fff8f7 !important; }
+.journeyApp .redTeamPanel :is(p, li, span, small) { color: #d8c1c0 !important; }
+.journeyApp .redTeamPanel textarea { border-color: #59484b !important; background: #17191d !important; color: #fff !important; }
+
+@media (max-width: 1260px) {
+  .journeyAppShell { grid-template-columns: 205px minmax(0, 1fr); }
+  .journeyInsightRail { display: none; }
+}
+@media (max-width: 880px) {
+  .journeyHeader { position: static !important; grid-template-columns: 1fr !important; gap: 10px; padding: 12px 14px !important; }
+  .headerUtilities { overflow-x: auto; padding-bottom: 2px; }
+  .journeyAppShell { grid-template-columns: 1fr; gap: 12px; padding: 12px 12px 34px; }
+  .journeySidebar { position: static; grid-template-columns: 1fr; padding: 10px; }
+  .journeyNav { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .journeyNav button { grid-template-columns: 18px minmax(0, 1fr) !important; gap: 5px; font-size: 11px; }
+  .journeyNav button > span { display: none; }
+  .journeyNav button svg { display: none; }
+  .sidebarVehicle, .sidebarEnergy, .sidebarGarage { display: none; }
+  .ideaLaunch { grid-template-columns: 1fr; padding: 26px 18px !important; }
+}
+@media (max-width: 560px) {
+  html, body { overflow-x: hidden; }
+  .journeyBrand strong { font-size: 16px; }
+  .journeyBrand small { font-size: 10px; }
+  .headerProjects, .proEntry { display: none; }
+  .journeyNav { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .journeyNav button { min-height: 44px !important; display: flex !important; align-items: center; justify-content: flex-start; }
+  .journeyNav button > span, .journeyNav button svg { display: none !important; }
+  .journeyNav button b { overflow: visible; text-overflow: clip; white-space: normal; line-height: 1.25; }
+  .ideaLaunchCopy h1 { font-size: 37px !important; }
+  .ideaConsole { padding: 17px !important; box-shadow: 5px 6px 0 #e3eee6 !important; }
+  .guidedIdeaBuilder { grid-template-columns: 1fr; }
+  .guidedIdeaBuilder > p, .guidedIdeaBuilder .guidedResource, .guidedIdeaBuilder .secondaryButton { grid-column: auto; }
+}
+
+@media (max-width: 420px) {
+  .journeyAppShell { padding-inline: 8px; }
+  .journeySidebar { padding: 9px 8px; }
+  .journeyNav { gap: 4px; }
+  .journeyNav button { padding-inline: 7px !important; font-size: 11px; }
+  .ideaLaunch { gap: 20px; padding: 22px 16px !important; }
+  .ideaLaunchCopy h1 { max-width: 100%; font-size: 32px !important; overflow-wrap: anywhere; }
+  .ideaLaunchCopy > p { max-width: 100%; font-size: 14px !important; overflow-wrap: anywhere; }
+  .launchWorldBoard { width: 100%; min-width: 0; min-height: 210px; }
+  .worldBoardTopline { left: 12px; right: 12px; gap: 8px; }
+  .worldBoardTopline strong { max-width: 150px; text-align: right; font-size: 9px; }
+}
