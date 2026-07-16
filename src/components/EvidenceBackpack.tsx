@@ -1,100 +1,48 @@
-import { BadgeDollarSign, Backpack, CalendarDays, Check, Edit3, Link2, MessageSquareText, MousePointerClick, Plus, Repeat2, Search, ShieldCheck, Trash2, X } from "lucide-react";
+import {
+  ArrowRight,
+  Backpack,
+  CalendarDays,
+  ChevronDown,
+  CircleAlert,
+  FileAudio,
+  FileImage,
+  FileText,
+  Flag,
+  Link2,
+  MessageSquareQuote,
+  PencilLine,
+  RotateCcw,
+  ShieldCheck,
+  ShieldX,
+  UsersRound,
+} from "lucide-react";
 import { useMemo, useState } from "react";
-import { evidenceSourceLabels, evidenceTypeLabels } from "../lib/labels";
-import type { EvidenceRecord, EvidenceType, Project } from "../types";
+import { evidenceTypeLabels } from "../lib/labels";
+import type { EvidenceRecord, ValidationTask } from "../types";
 
 interface EvidenceBackpackProps {
-  project: Project;
   records: EvidenceRecord[];
-  onAdd: (record: EvidenceRecord) => void;
-  onRemove: (recordId: string) => void;
+  tasks: ValidationTask[];
   onUpdate: (record: EvidenceRecord) => void;
+  onExclude: (record: EvidenceRecord) => void;
+  onOpenTask: (taskId?: string) => void;
 }
 
-export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }: EvidenceBackpackProps) {
-  const [type, setType] = useState<EvidenceType>("interview");
-  const [behavior, setBehavior] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const [url, setUrl] = useState("");
-  const [verifiable, setVerifiable] = useState(false);
-  const [error, setError] = useState("");
+export function EvidenceBackpack({ records, tasks, onUpdate, onExclude, onOpenTask }: EvidenceBackpackProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(records[0]?.id ?? null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBehavior, setEditingBehavior] = useState("");
   const [editingNote, setEditingNote] = useState("");
-  const [showComposer, setShowComposer] = useState(false);
-  const [quickType, setQuickType] = useState<EvidenceType>("interview");
-  const [quickBehavior, setQuickBehavior] = useState("");
-  const [quickError, setQuickError] = useState("");
+  const taskMap = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+  const grouped = useMemo(() => groupEvidence(records, tasks), [records, tasks]);
+  const stats = useMemo(() => ({
+    total: records.length,
+    confirmed: records.filter((record) => record.reviewStatus === "confirmed").length,
+    pending: records.filter((record) => record.reviewStatus === "pending").length,
+    rejected: records.filter((record) => record.reviewStatus === "rejected").length,
+  }), [records]);
 
-  const sortedRecords = useMemo(
-    () => [...records].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
-    [records],
-  );
-  const inventory = useMemo(() => [
-    { label: "探索记录", types: ["research", "interview", "problem_story", "test_post"] as EvidenceType[], icon: Search, tone: "blue" },
-    { label: "主动意向", types: ["active_interest", "signup"] as EvidenceType[], icon: MessageSquareText, tone: "yellow" },
-    { label: "试用行为", types: ["trial"] as EvidenceType[], icon: MousePointerClick, tone: "green" },
-    { label: "交易信号", types: ["quote", "payment"] as EvidenceType[], icon: BadgeDollarSign, tone: "red" },
-    { label: "复用增长", types: ["repeat", "referral"] as EvidenceType[], icon: Repeat2, tone: "violet" },
-  ].map((item) => ({
-    ...item,
-    count: records.filter((record) => record.reviewStatus === "confirmed" && item.types.includes(record.type)).reduce((total, record) => total + record.quantity, 0),
-  })), [records]);
-
-  function addRecord() {
-    if (!behavior.trim()) {
-      setError("请写清楚实际发生了什么行为。");
-      return;
-    }
-    onAdd({
-      id: `${Date.now()}-${type}`,
-      projectId: project.id,
-      type,
-      occurredAt: new Date().toISOString().slice(0, 10),
-      actor: "匿名外部对象",
-      behavior: behavior.trim(),
-      quantity: Math.max(1, quantity),
-      source: inferEvidenceSource(type),
-      note: "",
-      url: url.trim(),
-      verifiable,
-      reviewStatus: "confirmed",
-      origin: "manual",
-      rawRecordIds: [],
-    });
-    setBehavior("");
-    setUrl("");
-    setQuantity(1);
-    setVerifiable(false);
-    setError("");
-  }
-
-  function addQuickRecord() {
-    if (!quickBehavior.trim()) {
-      setQuickError("先用一句话写清楚今天真实发生了什么。");
-      return;
-    }
-    onAdd({
-      id: `${Date.now()}-${quickType}`,
-      projectId: project.id,
-      type: quickType,
-      occurredAt: new Date().toISOString().slice(0, 10),
-      actor: "匿名外部对象",
-      behavior: quickBehavior.trim(),
-      quantity: 1,
-      source: inferEvidenceSource(quickType),
-      note: "创始人快速记录",
-      url: "",
-      verifiable: false,
-      reviewStatus: "confirmed",
-      origin: "manual",
-      rawRecordIds: [],
-    });
-    setQuickBehavior("");
-    setQuickError("");
-  }
-
-  function beginEdit(record: EvidenceRecord) {
+  function startEdit(record: EvidenceRecord) {
     setEditingId(record.id);
     setEditingBehavior(record.behavior);
     setEditingNote(record.note);
@@ -107,90 +55,102 @@ export function EvidenceBackpack({ project, records, onAdd, onRemove, onUpdate }
   }
 
   return (
-    <div className="evidenceBackpackScreen">
-      <header className="backpackHeader">
-        <div><span className="routeEyebrow">证据背包</span><h1>把现实反馈收进背包，项目车才有继续前进的燃料。</h1><p>背包只收已经发生的行为。访谈、主动留言、试用、报价、付款与复用，会按强度成为不同等级的证据。</p></div>
-        <div className="backpackShellVisual" aria-label={`背包中有 ${records.length} 条记录`}><Backpack size={54} /><strong>{records.length}</strong><span>条现实记录</span><i /><i /><i /></div>
+    <div className="evidenceBackpackScreen taskEvidenceBackpack">
+      <header className="taskBackpackHeader">
+        <div><span>证据背包</span><h1>任务做完以后，把真实发生的结果收进来。</h1><p>这里只保存任务产生的现实记录。AI分析、项目计划和个人推测不会自动进入背包，也不会直接改变项目灯号。</p></div>
+        <div className="backpackCounter"><Backpack size={44} /><strong>{stats.total}</strong><span>条证据记录</span></div>
       </header>
 
-      <section className="evidenceInventory" aria-label="证据背包分类">
-        <div className="inventoryHeading"><div><span>背包库存</span><strong>{project.name || "当前项目"}</strong></div><button className="primaryButton" type="button" onClick={() => setShowComposer((value) => !value)}><Plus size={16} />{showComposer ? "收起录入" : "装入新证据"}</button></div>
-        <div className="inventoryShelf">
-          {inventory.map((item) => {
-            const Icon = item.icon;
-            return <article key={item.label} className={`inventoryItem tone-${item.tone}`}><div><Icon size={19} /><span>{item.label}</span></div><strong>{item.count}</strong><small>{item.count > 0 ? "已确认行为" : "等待收集"}</small></article>;
-          })}
-        </div>
-        <p className="inventoryRule"><ShieldCheck size={14} />AI推测不会自动进入背包；问卷结果需要你核对摘要后确认计入。</p>
+      <section className="evidenceStatusSummary">
+        <article><Backpack size={18} /><div><span>证据总数</span><strong>{stats.total}</strong></div></article>
+        <article className="confirmed"><ShieldCheck size={18} /><div><span>已确认</span><strong>{stats.confirmed}</strong></div></article>
+        <article className="pending"><CircleAlert size={18} /><div><span>需要补证</span><strong>{stats.pending}</strong></div></article>
+        <article className="rejected"><ShieldX size={18} /><div><span>已排除</span><strong>{stats.rejected}</strong></div></article>
       </section>
 
-      <section className="quickEvidenceCapture" aria-label="快速记录一条现实证据">
-        <div>
-          <span className="routeEyebrow">一分钟记录</span>
-          <strong>今天真实发生了什么？</strong>
-          <p>先记录事实，数量、链接和可复核材料以后再补。</p>
-        </div>
-        <div className="quickEvidenceBody">
-          <div className="quickEvidenceTypes" aria-label="选择证据类型">
-            {([
-              ["interview", "用户访谈"],
-              ["active_interest", "主动反馈"],
-              ["trial", "试用行为"],
-              ["payment", "付款信号"],
-            ] as const).map(([value, label]) => <button className={quickType === value ? "selected" : ""} type="button" key={value} onClick={() => setQuickType(value)}>{label}</button>)}
-          </div>
-          <textarea value={quickBehavior} onChange={(event) => setQuickBehavior(event.target.value)} placeholder="例如：把演示发给一位店主后，她主动问能否预约一次试用。" />
-          <div><span>{quickError}</span><button className="primaryButton" type="button" onClick={addQuickRecord}><Plus size={16} />放入背包</button></div>
-        </div>
-      </section>
+      <aside className="backpackRule"><ShieldCheck size={17} /><p><strong>证据规则</strong>只有任务执行后提交的用户行为记录，经过审核确认后才会计入证据充分度。不能在背包里手动把证据改成“已确认”。</p></aside>
 
-      {showComposer && <section className="evidenceComposer">
-        <div className="composerHeading"><div><Plus size={18} /><strong>添加一条现实证据</strong></div><span>链接不会发送给 AI</span></div>
-        <div className="evidenceComposerGrid simplifiedEvidenceComposer">
-          <label><span>证据类型</span><select value={type} onChange={(event) => setType(event.target.value as EvidenceType)}>{Object.entries(evidenceTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label><span>涉及人数或次数</span><input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
-          <label className="wide evidenceStoryField"><span>实际发生了什么</span><textarea value={behavior} onChange={(event) => setBehavior(event.target.value)} placeholder="例如：演示发给 10 位店主后，2 人主动要求试用，3 人说目前没有这个问题。" /></label>
-          <details className="evidenceOptionalProof wide">
-            <summary>有截图、问卷或链接？可选补充</summary>
-            <label><span>证明材料链接</span><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="公开页面、问卷结果或文档链接" /></label>
-            <label className="switchField"><input type="checkbox" checked={verifiable} onChange={(event) => setVerifiable(event.target.checked)} /><span>已有截图、记录或第三方可以复核</span></label>
-          </details>
-        </div>
-        {error && <p className="departureValidation">{error}</p>}
-        <div className="composerActions"><span>AI 推测与个人假设会保留，但不会提高证据等级。</span><button className="primaryButton" onClick={addRecord} type="button"><Plus size={16} />放入背包</button></div>
-      </section>}
+      {records.length === 0 ? (
+        <section className="taskBackpackEmpty"><Backpack size={38} /><h2>背包还是空的</h2><p>先完成访谈、试用、报价或付费验证任务，再提交截图、文件、数据或录音。</p><button className="primaryButton" type="button" onClick={() => onOpenTask()}>前往任务执行<ArrowRight size={16} /></button></section>
+      ) : (
+        <div className="milestoneEvidenceGroups">
+          {grouped.map((group) => (
+            <section key={group.id} className="milestoneEvidenceGroup">
+              <header><Flag size={17} /><div><h2>{group.title}</h2><p>{group.records.length} 条任务证据</p></div></header>
+              <div className="taskEvidenceRecordList">
+                {group.records.map((record) => {
+                  const task = record.taskId ? taskMap.get(record.taskId) : undefined;
+                  const expanded = expandedId === record.id;
+                  return (
+                    <article key={record.id} className={`taskEvidenceRecord review-${record.reviewStatus}`}>
+                      <button className="taskEvidenceRecordHeader" type="button" onClick={() => setExpandedId((current) => current === record.id ? null : record.id)}>
+                        <span className="recordTypeIcon">{attachmentIcon(record)}</span>
+                        <span className="recordMain"><small>{task ? `${task.milestoneTitle} · ${cleanTaskTitle(task.title)}` : "历史证据"}</small><strong>{evidenceTypeLabels[record.type]}</strong><em>{record.behavior}</em></span>
+                        <span className={`recordReviewBadge ${record.reviewStatus}`}>{reviewLabel(record.reviewStatus)}</span>
+                        <ChevronDown className={expanded ? "open" : ""} size={17} />
+                      </button>
 
-      <section className="evidenceTimeline">
-        <div className="timelineHeading"><div><span className="routeEyebrow">证据时间线</span><h2>{project.name || "当前项目"}的现实记录</h2></div><span>越接近试用、付款、复用，证据越强</span></div>
-        {sortedRecords.length === 0 ? (
-          <div className="evidenceEmpty"><Backpack size={30} /><strong>背包还是空的</strong><p>先完成一次访谈、公开测试或演示，再回来记录结果。</p></div>
-        ) : (
-          <div className="evidenceRecordList">
-            {sortedRecords.map((record) => (
-              <article key={record.id} className={`evidenceRecord source-${record.source} review-${record.reviewStatus}`}>
-                <div className="evidenceRecordHead"><span>{evidenceTypeLabels[record.type]}</span><div className="recordHeadActions"><em>{record.reviewStatus === "pending" ? "待确认" : record.reviewStatus === "rejected" ? "已排除" : record.origin === "survey" ? "问卷已确认" : "已确认"}</em><button type="button" onClick={() => beginEdit(record)} aria-label={`编辑${evidenceTypeLabels[record.type]}`}><Edit3 size={15} /></button><button type="button" onClick={() => onRemove(record.id)} aria-label={`删除${evidenceTypeLabels[record.type]}`}><Trash2 size={15} /></button></div></div>
-                {editingId === record.id ? <div className="evidenceInlineEdit"><textarea value={editingBehavior} onChange={(event) => setEditingBehavior(event.target.value)} /><input value={editingNote} onChange={(event) => setEditingNote(event.target.value)} placeholder="备注" /><div><button type="button" onClick={() => setEditingId(null)}>取消</button><button className="confirm" type="button" onClick={() => saveEdit(record)}>保存修改</button></div></div> : <strong>{record.behavior}</strong>}
-                <div className="evidenceMeta">
-                  <span><CalendarDays size={13} />{record.occurredAt}</span>
-                  <span>{record.actor}</span>
-                  <span>数量 {record.quantity}</span>
-                  <span><ShieldCheck size={13} />{record.verifiable ? "可复核" : "未复核"}</span>
-                  {record.url && <a href={record.url} target="_blank" rel="noreferrer"><Link2 size={13} />查看链接</a>}
-                </div>
-                <footer><span>{evidenceSourceLabels[record.source]}</span>{record.note && <p>{record.note}</p>}</footer>
-                {record.reviewStatus === "pending" && <div className="evidenceReviewActions"><p>确认代表AI总结与原始答卷一致，不代表第三方已经证明内容绝对真实。</p><button type="button" onClick={() => onUpdate({ ...record, reviewStatus: "rejected" })}><X size={14} />排除</button><button className="confirm" type="button" onClick={() => onUpdate({ ...record, reviewStatus: "confirmed" })}><Check size={14} />确认计入</button></div>}
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+                      {expanded ? <div className="taskEvidenceRecordBody">
+                        {editingId === record.id ? <div className="backpackEvidenceEdit"><label><span>实际发生了什么</span><textarea value={editingBehavior} onChange={(event) => setEditingBehavior(event.target.value)} /></label><label><span>补充说明</span><textarea value={editingNote} onChange={(event) => setEditingNote(event.target.value)} /></label><footer><button type="button" onClick={() => setEditingId(null)}>取消</button><button type="button" onClick={() => saveEdit(record)}>保存修改</button></footer></div> : <>
+                          <div className="evidenceFactGrid">
+                            <article><UsersRound size={16} /><span>样本数量</span><strong>{record.quantity} 人/次</strong></article>
+                            <article><CalendarDays size={16} /><span>提交时间</span><strong>{formatDate(record.occurredAt)}</strong></article>
+                            <article><Link2 size={16} /><span>证明材料</span><strong>{record.attachmentName || "未提供附件"}</strong></article>
+                          </div>
+                          <section className="evidenceRealityStory"><span>实际发生的行为</span><p>{record.behavior}</p></section>
+                          {record.userQuote ? <section className="evidenceUserQuote"><MessageSquareQuote size={18} /><div><span>用户原话</span><blockquote>{record.userQuote}</blockquote></div></section> : null}
+                          {record.note ? <section className="evidenceDataNote"><FileText size={17} /><div><span>数据或补充记录</span><p>{record.note}</p></div></section> : null}
+                          <section className="evidenceAssessment"><span>AI证据质量评估 · 比赛预设规则</span><p>{record.assessment || (record.reviewStatus === "confirmed" ? "该记录包含真实行为和数量，已作为现实证据确认。" : "该记录仍缺少足够的行为、数量或可复核材料。")}</p></section>
+                        </>}
+                        <footer className="backpackRecordActions">
+                          <button type="button" onClick={() => startEdit(record)}><PencilLine size={14} />修改说明</button>
+                          {record.reviewStatus === "pending" ? <button type="button" onClick={() => onOpenTask(record.taskId)}><RotateCcw size={14} />补充证据</button> : null}
+                          {record.taskId ? <button type="button" onClick={() => onOpenTask(record.taskId)}>返回对应任务<ArrowRight size={14} /></button> : null}
+                          {record.reviewStatus !== "rejected" ? <button className="rejectEvidenceButton" type="button" onClick={() => onExclude(record)}><ShieldX size={14} />排除无效证据</button> : null}
+                        </footer>
+                      </div> : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function inferEvidenceSource(type: EvidenceType): EvidenceRecord["source"] {
-  if (type === "research") return "web_research";
-  if (type === "interview" || type === "problem_story") return "user_feedback";
-  if (type === "quote" || type === "payment" || type === "repeat" || type === "referral") return "payment_or_retention";
-  return "user_behavior";
+function groupEvidence(records: EvidenceRecord[], tasks: ValidationTask[]) {
+  const taskMap = new Map(tasks.map((task) => [task.id, task]));
+  const groups = new Map<string, { id: string; title: string; records: EvidenceRecord[] }>();
+  records.forEach((record) => {
+    const task = record.taskId ? taskMap.get(record.taskId) : undefined;
+    const id = record.milestoneId || task?.milestoneId || "legacy";
+    const title = task?.milestoneTitle || (id === "legacy" ? "历史与其他证据" : "验证里程碑");
+    const group = groups.get(id) ?? { id, title, records: [] };
+    group.records.push(record);
+    groups.set(id, group);
+  });
+  return [...groups.values()].map((group) => ({ ...group, records: group.records.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)) }));
+}
+
+function attachmentIcon(record: EvidenceRecord) {
+  if (record.attachmentType === "audio") return <FileAudio size={18} />;
+  if (record.attachmentType === "screenshot") return <FileImage size={18} />;
+  return <FileText size={18} />;
+}
+
+function reviewLabel(status: EvidenceRecord["reviewStatus"]) {
+  if (status === "confirmed") return "已确认";
+  if (status === "rejected") return "已排除";
+  return "需要补证";
+}
+
+function cleanTaskTitle(title: string) {
+  return title.replace(/^M\d+[^·]*·\s*/, "").replace(/^第\s*\d+\s*天\s*·\s*/, "");
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }

@@ -145,7 +145,7 @@ function normalizeWorkspace(workspace: Partial<ProjectWorkspace>): ProjectWorksp
       ? workspace.redTeamTurns.filter(isRedTeamTurn).map((turn) => ({ ...turn, cycleId: turn.cycleId || activeCycleId || undefined })).slice(-24)
       : [],
     tasks: Array.isArray(workspace.tasks)
-      ? workspace.tasks.filter(isValidationTask).map((task) => normalizeValidationTask(task, project.id, activeCycleId)).slice(0, 7)
+      ? workspace.tasks.filter(isValidationTask).map((task) => normalizeValidationTask(task, project.id, activeCycleId)).slice(0, 16)
       : [],
     rounds: Array.isArray(workspace.rounds)
       ? workspace.rounds.filter(isCalibrationRound).map((round) => normalizeCalibrationRound(round, project)).slice(0, 12)
@@ -205,6 +205,12 @@ function normalizeEvidenceRecord(record: EvidenceRecord, projectId: string): Evi
     reviewStatus: record.reviewStatus === "pending" || record.reviewStatus === "rejected" ? record.reviewStatus : "confirmed",
     origin: record.origin === "survey" || record.origin === "task" || record.origin === "manual" ? record.origin : "legacy",
     rawRecordIds: Array.isArray(record.rawRecordIds) ? record.rawRecordIds.filter((id): id is string => typeof id === "string") : [],
+    taskId: typeof record.taskId === "string" ? record.taskId : undefined,
+    milestoneId: typeof record.milestoneId === "string" ? record.milestoneId : undefined,
+    attachmentType: record.attachmentType === "screenshot" || record.attachmentType === "file" || record.attachmentType === "data" || record.attachmentType === "audio" ? record.attachmentType : undefined,
+    attachmentName: typeof record.attachmentName === "string" ? record.attachmentName : undefined,
+    userQuote: typeof record.userQuote === "string" ? record.userQuote : undefined,
+    assessment: typeof record.assessment === "string" ? record.assessment : undefined,
   };
 }
 
@@ -309,7 +315,7 @@ function normalizeValidationTask(task: ValidationTask, projectId: string, active
     id: task.id,
     projectId,
     cycleId: typeof task.cycleId === "string" ? task.cycleId : activeCycleId || undefined,
-    day: Math.min(7, Math.max(1, task.day)),
+    day: Math.min(30, Math.max(1, task.day)),
     title: typeof task.title === "string" ? task.title : `第 ${task.day} 天 · 现实验证`,
     detail: typeof task.detail === "string" ? task.detail : "",
     passCriteria: typeof task.passCriteria === "string" ? task.passCriteria : "产生一条真实外部行为记录。",
@@ -317,6 +323,19 @@ function normalizeValidationTask(task: ValidationTask, projectId: string, active
     status: task.status === "completed" || task.status === "failed" ? task.status : "pending",
     result: typeof task.result === "string" ? task.result : "",
     evidenceIds: Array.isArray(task.evidenceIds) ? task.evidenceIds.filter((id): id is string => typeof id === "string") : [],
+    milestoneId: typeof task.milestoneId === "string" ? task.milestoneId : undefined,
+    milestoneTitle: typeof task.milestoneTitle === "string" ? task.milestoneTitle : undefined,
+    target: typeof task.target === "string" ? task.target : undefined,
+    actions: Array.isArray(task.actions) ? task.actions.filter((item): item is string => typeof item === "string") : undefined,
+    tools: Array.isArray(task.tools) ? task.tools.filter((item) => item && typeof item.title === "string" && typeof item.content === "string") : undefined,
+    duration: typeof task.duration === "string" ? task.duration : undefined,
+    estimatedCost: typeof task.estimatedCost === "string" ? task.estimatedCost : undefined,
+    workflowStatus: task.workflowStatus === "locked" || task.workflowStatus === "ready" || task.workflowStatus === "needs_evidence" || task.workflowStatus === "delayed" || task.workflowStatus === "blocked" || task.workflowStatus === "skipped" || task.workflowStatus === "completed"
+      ? task.workflowStatus
+      : task.status === "completed" ? "completed" : task.status === "failed" ? "blocked" : "ready",
+    delayReason: typeof task.delayReason === "string" ? task.delayReason : undefined,
+    delayedUntil: typeof task.delayedUntil === "string" ? task.delayedUntil : undefined,
+    difficulty: typeof task.difficulty === "string" ? task.difficulty : undefined,
   };
 }
 

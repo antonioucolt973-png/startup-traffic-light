@@ -20,7 +20,7 @@ const stageOrder: ProjectStage[] = ["idea", "research", "demo", "mvp", "growth"]
 export function ensureActiveCycle(workspace: ProjectWorkspace, report: DecisionReport): ProjectWorkspace {
   const active = workspace.cycles.find((cycle) => cycle.id === workspace.activeCycleId && cycle.status === "active");
   if (active) {
-    const tasks = workspace.tasks.length === 7
+    const tasks = workspace.tasks.length > 0
       ? workspace.tasks.map((task) => ({ ...task, cycleId: active.id }))
       : createValidationTasks(workspace.project.id, report, active.id);
     return { ...workspace, tasks };
@@ -41,6 +41,7 @@ export function transitionJourneyCycle(
   report: DecisionReport,
   outcome: CycleOutcome,
   aiReview = buildCycleReview(workspace, report),
+  nextGoal?: string,
 ): ProjectWorkspace {
   const prepared = ensureActiveCycle(workspace, report);
   const active = prepared.cycles.find((cycle) => cycle.id === prepared.activeCycleId)!;
@@ -86,7 +87,12 @@ export function transitionJourneyCycle(
     cycles: [completed, ...prepared.cycles.filter((cycle) => cycle.id !== active.id)],
     activeCycleId: "",
   };
-  return ensureActiveCycle(base, nextReport);
+  const nextWorkspace = ensureActiveCycle(base, nextReport);
+  if (!nextGoal?.trim()) return nextWorkspace;
+  return {
+    ...nextWorkspace,
+    cycles: nextWorkspace.cycles.map((cycle) => cycle.id === nextWorkspace.activeCycleId ? { ...cycle, primaryGoal: nextGoal.trim() } : cycle),
+  };
 }
 
 export function recommendCycleOutcome(report: DecisionReport, stage: ProjectStage): CycleOutcome {

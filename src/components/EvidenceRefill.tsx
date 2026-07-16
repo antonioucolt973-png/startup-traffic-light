@@ -1,250 +1,226 @@
-import { ArrowRight, Backpack, CalendarCheck2, Check, ChevronDown, CircleX, FileAudio, FileImage, FileText, Flame, Link2, RotateCcw, Save, Sparkles, TimerReset } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  Backpack,
+  CheckCircle2,
+  ChevronDown,
+  CircleAlert,
+  Flag,
+  History,
+  Lightbulb,
+  LockKeyhole,
+  RotateCcw,
+  Route,
+  Sparkles,
+  Target,
+  TrendingUp,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import { recommendCycleOutcome } from "../lib/cycleEngine";
-import { requestAiCoach } from "../lib/aiClient";
-import { evidenceTypeLabels, gateLabels, taskStatusLabels } from "../lib/labels";
-import type { AiCoachData } from "../lib/aiSchemas";
-import type { CalibrationRound, CycleOutcome, DecisionReport, Evidence, EvidenceRecord, JourneyCycle, Project, ValidationTask } from "../types";
+import type { CalibrationRound, CycleOutcome, DecisionReport, EvidenceRecord, JourneyCycle, Project, ValidationTask } from "../types";
 
 interface EvidenceRefillProps {
   report: DecisionReport;
   project: Project;
-  evidence: Evidence;
+  initialProject: Project | null;
   tasks: ValidationTask[];
   records: EvidenceRecord[];
   rounds: CalibrationRound[];
   activeCycle?: JourneyCycle;
   completedCycles: JourneyCycle[];
-  onTaskChange: (task: ValidationTask) => void;
   onOpenBackpack: () => void;
-  onRecalibrate: () => void;
-  onStartNextCycle: (outcome: CycleOutcome, aiReview: string) => void;
-  saveState: string;
+  onStartNextCycle: (outcome: CycleOutcome, aiReview: string, nextGoal: string) => void;
 }
+
+type ReviewSection = "result" | "assumptions" | "review" | "decision";
+
+const reviewSections: Array<{ id: ReviewSection; label: string }> = [
+  { id: "result", label: "本轮结果" },
+  { id: "assumptions", label: "假设结算" },
+  { id: "review", label: "AI复盘" },
+  { id: "decision", label: "下一轮决策" },
+];
 
 export function EvidenceRefill({
   report,
   project,
-  evidence,
+  initialProject,
   tasks,
   records,
   rounds,
   activeCycle,
   completedCycles,
-  onTaskChange,
   onOpenBackpack,
-  onRecalibrate,
   onStartNextCycle,
-  saveState,
 }: EvidenceRefillProps) {
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(() => tasks.find((task) => task.status === "pending")?.id ?? tasks[0]?.id ?? null);
-  const latestRound = rounds[0];
-  const savedMatchesLive = latestRound ? roundMatchesReport(latestRound, report, records) : false;
-  const previous = savedMatchesLive && rounds[1] ? rounds[1] : latestRound;
-  const current = savedMatchesLive ? latestRound : undefined;
-  const evidenceDelta = previous ? report.evidenceScore - previous.evidenceScore : report.evidenceScore;
-  const newEvidenceCount = previous ? records.filter((record) => !previous.evidenceRecordIds.includes(record.id)).length : records.length;
-  const changedGates = previous ? report.roadtestChecks.filter((gate) => previous.gateStatuses[gate.id] !== gate.status) : report.roadtestChecks;
-  const completed = tasks.filter((task) => task.status === "completed").length;
-  const failed = tasks.filter((task) => task.status === "failed").length;
-  const recommendation = recommendCycleOutcome(report, activeCycle?.stageAtStart ?? "idea");
-  const [selectedOutcome, setSelectedOutcome] = useState<CycleOutcome | null>(null);
-  const [aiReview, setAiReview] = useState<AiCoachData["cycleReview"]>();
-  const [reviewSource, setReviewSource] = useState<"ai" | "fallback">("fallback");
-  const [checkin, setCheckin] = useState(() => loadCheckin(project.id));
+  const confirmedRecords = useMemo(() => records.filter((record) => record.reviewStatus === "confirmed"), [records]);
+  const pendingRecords = records.filter((record) => record.reviewStatus === "pending");
+  const completedTasks = tasks.filter((task) => task.workflowStatus === "completed");
+  const baselineScore = activeCycle?.evidenceScoreBefore ?? rounds[rounds.length - 1]?.evidenceScore ?? 0;
+  const scoreDelta = report.evidenceScore - baselineScore;
+  const recommendation = recommendCycleOutcome(report, activeCycle?.stageAtStart ?? project.currentStage);
+  const [selectedOutcome, setSelectedOutcome] = useState<CycleOutcome>(recommendation);
+  const [nextGoal, setNextGoal] = useState(() => buildNextGoal(project, confirmedRecords));
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const hypothesisRows = useMemo(() => buildHypothesisRows(project, tasks, confirmedRecords), [confirmedRecords, project, tasks]);
+  const review = useMemo(() => buildAiReview(project, confirmedRecords, completedTasks, pendingRecords.length), [completedTasks, confirmedRecords, pendingRecords.length, project]);
   const newCycleNumber = (activeCycle?.cycleNumber ?? completedCycles.length + 1) + 1;
-  const effectiveOutcome = selectedOutcome === "advance" && recommendation !== "advance"
-    ? recommendation
-    : selectedOutcome === "return" && (activeCycle?.stageAtStart ?? "idea") === "idea"
-      ? recommendation
-      : selectedOutcome ?? recommendation;
+  const canAdvance = recommendation === "advance";
+  const canReturn = (activeCycle?.stageAtStart ?? project.currentStage) !== "idea";
 
-  useEffect(() => {
-    let active = true;
-    void requestAiCoach({
-      mode: "cycle_review",
-      project: {
-        name: project.name,
-        description: project.description,
-        targetUser: project.targetUser,
-        painPoint: project.painPoint,
-        alternative: project.alternative,
-        acquisition: project.acquisition,
-        monetization: project.monetization,
-        currentStage: project.currentStage,
-        existingArtifact: project.existingArtifact,
-        biggestUncertainty: project.biggestUncertainty,
-      },
-      evidence: {
-        interviewCount: evidence.interviewCount,
-        activeInterestCount: evidence.messageCount + evidence.signupCount,
-        trialCount: evidence.demoTrialCount,
-        paymentCount: evidence.paymentSignalCount,
-        hasRetention: evidence.retentionSignal,
-      },
-      cycle: {
-        cycleNumber: activeCycle?.cycleNumber ?? 1,
-        completedTasks: completed,
-        failedTasks: failed,
-        newEvidenceCount,
-        evidenceDelta,
-        currentLight: report.light,
-        ruleRecommendation: recommendation,
-        previousGoal: activeCycle?.primaryGoal ?? report.currentFocus,
-      },
-    }).then((response) => {
-      if (!active) return;
-      setAiReview(response.data.cycleReview);
-      setReviewSource(response.source);
-    });
-    return () => { active = false; };
-  }, [activeCycle?.cycleNumber, activeCycle?.primaryGoal, completed, evidence.demoTrialCount, evidence.interviewCount, evidence.messageCount, evidence.paymentSignalCount, evidence.retentionSignal, evidence.signupCount, evidenceDelta, failed, newEvidenceCount, project, recommendation, report.currentFocus, report.light]);
-
-  function updateTask(task: ValidationTask, patch: Partial<ValidationTask>) {
-    onTaskChange({ ...task, ...patch });
+  function scrollToSection(id: ReviewSection) {
+    document.getElementById(`growth-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function toggleEvidence(task: ValidationTask, recordId: string) {
-    const evidenceIds = task.evidenceIds.includes(recordId)
-      ? task.evidenceIds.filter((id) => id !== recordId)
-      : [...task.evidenceIds, recordId];
-    updateTask(task, { evidenceIds });
-  }
-
-  function completeCheckin() {
-    const today = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-    const next = checkin.lastDate === today
-      ? checkin
-      : { lastDate: today, streak: checkin.lastDate === yesterday ? checkin.streak + 1 : 1 };
-    setCheckin(next);
-    window.localStorage.setItem(`opc-checkin-${project.id}`, JSON.stringify(next));
+  function chooseOutcome(outcome: CycleOutcome) {
+    if (outcome === "advance" && !canAdvance) return;
+    if (outcome === "return" && !canReturn) return;
+    setSelectedOutcome(outcome);
   }
 
   return (
-    <div className="evidenceRefillScreen">
-      <header className="refillHeader">
-        <div><span className="routeEyebrow">现实任务日志</span><h1>每完成一段路，就把现实结果带回来。</h1><p>任务不是打卡。记录行为、数量和拒绝原因，再关联证据；重新校准后，你会看到项目使用前后的真实变化。</p></div>
-        <div className="refillHeaderActions"><div className="refillProgress"><strong>{completed}</strong><span>完成</span><strong>{failed}</strong><span>未通过</span></div><button className={`checkinButton ${checkin.lastDate === new Date().toISOString().slice(0, 10) ? "checked" : ""}`} type="button" onClick={completeCheckin}><Flame size={16} />{checkin.lastDate === new Date().toISOString().slice(0, 10) ? "今日已确认行动" : "确认今天要推进"}<small>连续 {checkin.streak} 天</small></button></div>
+    <div className="evidenceRefillScreen growthReviewScreen">
+      <header className="growthReviewHero">
+        <div><span>第 {activeCycle?.cycleNumber ?? 1} 轮成长回顾</span><h1>这一轮，现实告诉了我们什么？</h1><p>结算任务、证据和关键假设，再决定下一轮继续、调整还是返回。AI只能基于已确认证据复盘。</p></div>
+        <article className={`growthConclusion light-${report.light}`}><small>当前结论</small><strong>{conclusionTitle(report, confirmedRecords.length)}</strong><p>{conclusionSummary(report, confirmedRecords.length)}</p></article>
       </header>
 
-      <section className="calibrationCompare">
-        <div className="compareHeading"><div><TimerReset size={18} /><strong>{savedMatchesLive && rounds[1] ? "最近一次校准变化" : "当前待校准变化"}</strong></div><span>{newEvidenceCount} 条新证据</span></div>
-        <div className="compareLane">
-          <article><span>上次</span><strong>{previous?.lightLabel ?? "尚未锁定"}</strong><p>证据 {previous?.evidenceScore ?? 0}/100</p><small>投入 {previous?.investmentLimit.days ?? 0} 天 / {previous?.investmentLimit.money ?? 0} 元</small></article>
-          <div className="compareArrow"><RotateCcw size={21} /><strong>{formatDelta(evidenceDelta)}</strong><span>证据分变化</span></div>
-          <article className={`light-${report.light}`}><span>现在</span><strong>{current?.lightLabel ?? report.lightLabel}</strong><p>证据 {report.evidenceScore}/100</p><small>投入 {report.investmentLimit.days} 天 / {report.investmentLimit.money} 元</small></article>
+      <nav className="growthReviewNav" aria-label="成长回顾页面导览">
+        {reviewSections.map((section, index) => <button key={section.id} type="button" onClick={() => scrollToSection(section.id)}><i>{index + 1}</i><span>{section.label}</span></button>)}
+      </nav>
+
+      <section id="growth-result" className="growthReviewSection roundSettlement">
+        <header><div><span>本轮结算</span><h2>不是完成了多少页面，而是获得了什么现实结果。</h2></div><Flag size={26} /></header>
+        <div className="settlementSummary">
+          <article className="settlementNarrative">
+            <div className="proved"><CheckCircle2 size={20} /><div><span>这一轮已经得到</span><strong>{review.achievement}</strong></div></div>
+            <div className="unproved"><CircleAlert size={20} /><div><span>这一轮还没有证明</span><strong>{review.highestRisk}</strong></div></div>
+          </article>
+          <div className="settlementMetrics">
+            <article><span>已执行任务</span><strong>{completedTasks.length}<small>/{tasks.length}</small></strong></article>
+            <article><span>已确认证据</span><strong>{confirmedRecords.length}</strong></article>
+            <article><span>需要补证</span><strong>{pendingRecords.length}</strong></article>
+            <article className={`light-${report.light}`}><span>当前灯号</span><strong>{report.lightLabel}</strong></article>
+          </div>
         </div>
-        <div className="gateChangeList">
-          {changedGates.length === 0 ? <p>六个路口暂时没有状态变化。</p> : changedGates.map((gate) => <span key={gate.id}><b>{gateLabels[gate.id]}</b><em>{previous?.gateStatuses[gate.id] ?? "未检查"}</em><i>→</i><strong>{gate.status}</strong></span>)}
+        <div className="evidenceChangeBar"><div><span>证据充分度变化</span><strong>{baselineScore}</strong><i>→</i><strong>{report.evidenceScore}</strong><em>{formatDelta(scoreDelta)}</em></div><div className="evidenceChangeMeter"><i style={{ width: `${baselineScore}%` }} /><b style={{ width: `${report.evidenceScore}%` }} /></div><button type="button" onClick={onOpenBackpack}><Backpack size={15} />查看证据依据</button></div>
+      </section>
+
+      <section id="growth-assumptions" className="growthReviewSection assumptionSettlement">
+        <header><div><span>假设结算</span><h2>哪些得到支持，哪些仍然只是想法。</h2><p>结论只读取已确认证据；待补证和已排除记录不会支持假设。</p></div><Target size={26} /></header>
+        <div className="hypothesisTable" role="table" aria-label="关键假设验证结果">
+          <div className="hypothesisTableHead" role="row"><span>关键假设</span><span>结论</span><span>证据依据</span></div>
+          {hypothesisRows.map((row) => <article key={row.title} className={`hypothesisRow status-${row.status}`} role="row"><strong>{row.title}</strong><span>{row.status}</span><p>{row.evidence}</p>{row.hasEvidence ? <button type="button" onClick={onOpenBackpack}>查看证据<ArrowRight size={13} /></button> : null}</article>)}
         </div>
       </section>
 
-      <section className="taskExecutionBoard">
-        <div className="executionHeading"><div><span className="routeEyebrow">7 天执行记录</span><h2>每个任务都要留下结果和证据</h2></div><button className="ghostButton" type="button" onClick={onOpenBackpack}><Backpack size={16} />新增证据</button></div>
-        <div className="taskExecutionList">
-          {tasks.map((task) => (
-            <article key={task.id} className={`taskExecutionItem missionLogItem status-${task.status} ${expandedTaskId === task.id ? "expanded" : ""}`}>
-              <button className="taskMissionHeader" type="button" onClick={() => setExpandedTaskId((current) => current === task.id ? null : task.id)} aria-expanded={expandedTaskId === task.id}>
-                <div className="taskDay">{String(task.day).padStart(2, "0")}</div>
-                <div><span>{taskStatusLabels[task.status]}</span><strong>{task.title}</strong><p>{task.detail}</p></div>
-                <div className="missionHeaderMeta"><span>{task.evidenceIds.length} 条关联证据</span><ChevronDown size={18} /></div>
-              </button>
-              {expandedTaskId === task.id && <div className="missionLogBody">
-                <div className="taskStandards"><p><span>通过标准</span>{task.passCriteria}</p><p><span>停止或调整</span>{task.stopCriteria}</p></div>
-                <div className="taskStatusControl" aria-label={`第 ${task.day} 天任务状态`}>
-                  <button className={task.status === "pending" ? "active" : ""} type="button" onClick={() => updateTask(task, { status: "pending" })}><RotateCcw size={14} />待执行</button>
-                  <button className={task.status === "completed" ? "active success" : ""} type="button" onClick={() => updateTask(task, { status: "completed" })}><Check size={14} />已完成</button>
-                  <button className={task.status === "failed" ? "active failed" : ""} type="button" onClick={() => updateTask(task, { status: "failed" })}><CircleX size={14} />未通过</button>
-                </div>
-                <label className="taskResultField"><span>现实结果</span><textarea value={task.result} onChange={(event) => updateTask(task, { result: event.target.value })} placeholder="写实际行为、数量和拒绝原因，不写‘感觉不错’。" /></label>
-                <div className="taskEvidenceLinks"><span><Link2 size={13} />关联背包证据</span><div>{records.length === 0 ? <small>背包中还没有证据</small> : records.slice(0, 8).map((record) => <button key={record.id} className={task.evidenceIds.includes(record.id) ? "linked" : ""} type="button" onClick={() => toggleEvidence(task, record.id)}>{evidenceTypeLabels[record.type]} · {record.quantity}</button>)}</div></div>
-                <div className="futureEvidenceUploads" aria-label="未来支持的证据提交方式"><span><CalendarCheck2 size={13} />补充材料</span><i><FileImage size={14} />上传截图 · 即将开放</i><i><FileText size={14} />上传文件 · 即将开放</i><i><FileAudio size={14} />上传录音 · 即将开放</i></div>
-              </div>}
-            </article>
-          ))}
+      <section className="growthReviewSection projectGrowthChanges">
+        <header><div><span>本轮成长变化</span><h2>项目从模糊想法，变成了更具体的验证对象。</h2></div><TrendingUp size={26} /></header>
+        <div className="growthChangeList">
+          {buildGrowthChanges(initialProject, project, confirmedRecords).map((change) => <article key={change.label}><span>{change.label}</span><div><small>起点</small><p>{change.before}</p></div><ArrowRight size={17} /><div className="after"><small>现在</small><strong>{change.after}</strong></div></article>)}
         </div>
       </section>
 
-      <section className="recalibrateBar">
-        <div><Save size={20} /><p><strong>重新校准只读取背包证据</strong><span>任务勾选和文字说明不会直接提高证据分。</span></p></div>
-        <button className="primaryButton" type="button" onClick={onRecalibrate}><RotateCcw size={16} />{saveState}</button>
+      <section id="growth-review" className="growthReviewSection aiRoundReview">
+        <header><div><span>AI阶段复盘</span><h2>只根据已确认的现实证据得出摘要。</h2><p>依据：{completedTasks.length} 项已通过任务、{confirmedRecords.length} 条已确认证据。</p></div><Sparkles size={27} /></header>
+        <div className="aiReviewGrid">
+          <article><CheckCircle2 size={18} /><span>本轮得到</span><strong>{review.achievement}</strong></article>
+          <article><TrendingUp size={18} /><span>下降的风险</span><strong>{review.loweredRisk}</strong></article>
+          <article className="risk"><CircleAlert size={18} /><span>当前最高风险</span><strong>{review.highestRisk}</strong></article>
+          <article className="goal"><Target size={18} /><span>下一轮唯一目标</span><strong>{nextGoal}</strong></article>
+        </div>
+        {confirmedRecords.length === 0 ? <aside className="noEvidenceWarning"><CircleAlert size={17} /><p>本轮没有已确认证据。即使完成了操作，也不能升级项目判断；下一轮仍应优先获得真实用户行为。</p></aside> : null}
       </section>
 
-      <section className="cycleReviewBoard">
-        <header className="cycleReviewHeading">
-          <div><Sparkles size={20} /><span><small>AI 阶段回顾</small><strong>这不是终点，而是下一轮创业旅程的入口。</strong></span></div>
-          <em>第 {activeCycle?.cycleNumber ?? 1} 轮</em>
-        </header>
-        <div className="cycleReviewSummary">
-          <article><span>现实行动</span><strong>{completed} 项完成</strong><p>{failed > 0 ? `${failed} 项未通过，同样会进入下一轮判断。` : "已完成任务会与现实证据一起归档。"}</p></article>
-          <article><span>证据变化</span><strong>{formatDelta(evidenceDelta)} 分</strong><p>新增 {newEvidenceCount} 条证据，当前证据 {report.evidenceScore}/100。</p></article>
-          <article><span>AI 结论 · {reviewSource === "ai" ? "模型复盘" : "本地复盘"}</span><strong>{outcomeLabels[recommendation].title}</strong><p>{aiReview?.summary ?? buildReviewSummary(report, completed, failed, newEvidenceCount)}</p></article>
+      <section id="growth-decision" className="growthReviewSection nextCycleDecision">
+        <header><div><span>下一轮决策</span><h2>选择继续前进、保持调整或返回修正。</h2></div><Route size={26} /></header>
+        <div className="outcomeDecisionCards" role="radiogroup" aria-label="下一轮方向">
+          <button className={selectedOutcome === "advance" ? "selected" : ""} type="button" disabled={!canAdvance} onClick={() => chooseOutcome("advance")} role="radio" aria-checked={selectedOutcome === "advance"}><span>{canAdvance ? <TrendingUp size={18} /> : <LockKeyhole size={18} />}继续前进</span><strong>进入下一创业阶段</strong><p>关键证据达到门槛，进入更强的交易或交付验证。</p>{recommendation === "advance" ? <em>AI推荐</em> : <small>当前证据未达到升级门槛</small>}</button>
+          <button className={selectedOutcome === "hold" ? "selected" : ""} type="button" onClick={() => chooseOutcome("hold")} role="radio" aria-checked={selectedOutcome === "hold"}><span><RotateCcw size={18} />保持阶段</span><strong>调整下一轮验证路线</strong><p>不升级项目阶段，只更换任务和验证方法。</p>{recommendation === "hold" ? <em>AI推荐</em> : null}</button>
+          <button className={selectedOutcome === "return" ? "selected" : ""} type="button" disabled={!canReturn} onClick={() => chooseOutcome("return")} role="radio" aria-checked={selectedOutcome === "return"}><span>{canReturn ? <ArrowRight size={18} /> : <LockKeyhole size={18} />}返回修正</span><strong>退回上一阶段修正假设</strong><p>目标用户、问题或商业路径被否定时，缩小范围重新开始。</p>{recommendation === "return" ? <em>AI推荐</em> : null}</button>
         </div>
-        {aiReview && <div className="cycleAiBrief"><div><span>本轮得到</span>{aiReview.achievements.map((item) => <p key={item}>{item}</p>)}</div><div><span>风险变化</span>{aiReview.riskChanges.map((item) => <p key={item}>{item}</p>)}</div><div><span>下一轮唯一目标</span><strong>{aiReview.nextGoal}</strong><p>{aiReview.rationale}</p></div></div>}
-        <div className="cycleOutcomeChooser" role="radiogroup" aria-label="选择下一轮方向">
-          {(["advance", "hold", "return"] as CycleOutcome[]).map((outcome) => {
-            const option = outcomeLabels[outcome];
-            const disabled = outcome === "advance" && recommendation !== "advance" || outcome === "return" && (activeCycle?.stageAtStart ?? "idea") === "idea";
-            return <button key={outcome} className={effectiveOutcome === outcome ? "selected" : ""} type="button" disabled={disabled} onClick={() => setSelectedOutcome(outcome)} role="radio" aria-checked={effectiveOutcome === outcome}>
-              <span>{option.kicker}{recommendation === outcome ? " · AI推荐" : ""}</span><strong>{option.title}</strong><p>{option.description}</p>
-            </button>;
-          })}
-        </div>
-        <footer className="cycleLaunchFooter">
-          <p><span>下一轮将继承</span>项目资料、全部证据、历史风险、任务结果和 AI 建议。当前任务与路线会归档，不会覆盖。</p>
-          <button className="primaryButton" type="button" onClick={() => onStartNextCycle(effectiveOutcome, aiReview?.summary ?? buildReviewSummary(report, completed, failed, newEvidenceCount))}>开启第 {newCycleNumber} 轮<ArrowRight size={17} /></button>
-        </footer>
+
+        <article className="nextCycleLaunchCard">
+          <header><div><span>第 {newCycleNumber} 轮即将开始</span><h3>带着证据进入下一轮，而不是从头再来。</h3></div><Lightbulb size={25} /></header>
+          <label><span>下一轮唯一目标</span><textarea value={nextGoal} onChange={(event) => setNextGoal(event.target.value)} /></label>
+          <div className="nextCycleFacts"><p><span>建议周期</span><strong>7天</strong></p><p><span>投入上限</span><strong>{report.investmentLimit.days}天 / {report.investmentLimit.money}元</strong></p><p><span>将继承</span><strong>项目资料、历史证据、风险记录和任务结果</strong></p></div>
+          <footer><p>选择“开启下一轮”后，本轮任务与证据会归档，不会被覆盖。</p><button className="primaryButton" type="button" disabled={!nextGoal.trim()} onClick={() => onStartNextCycle(selectedOutcome, review.summary, nextGoal)}>开启第 {newCycleNumber} 轮<ArrowRight size={16} /></button></footer>
+        </article>
       </section>
 
-      <section className="calibrationHistoryBoard">
-        <div><TimerReset size={18} /><strong>长期校准历程</strong></div>
-        {rounds.length === 0 ? <p>还没有校准记录。</p> : <ol>{rounds.map((round) => <li key={round.id}><span>{formatDate(round.createdAt)}</span><strong>{round.lightLabel}</strong><em>证据 {round.evidenceScore}/100</em><p>{round.changeSummary}</p></li>)}</ol>}
+      <section className="growthReviewSection cycleHistorySection">
+        <header><div><span>历史轮次</span><h2>每一轮都保留当时的目标、证据和决定。</h2></div><History size={25} /></header>
+        {completedCycles.length === 0 ? <div className="cycleHistoryEmpty">完成当前轮次后，这里会出现第一条成长记录。</div> : <div className="cycleHistoryList">{completedCycles.map((cycle) => { const expanded = expandedHistoryId === cycle.id; return <article key={cycle.id}><button type="button" onClick={() => setExpandedHistoryId((current) => current === cycle.id ? null : cycle.id)}><i>第 {cycle.cycleNumber} 轮</i><span>{stageLabel(cycle.stageAtStart)}验证</span><strong>{lightLabel(cycle.lightBefore)} → {cycle.lightAfter ? lightLabel(cycle.lightAfter) : "未结算"}</strong><em>证据 {cycle.evidenceScoreBefore} → {cycle.evidenceScoreAfter ?? cycle.evidenceScoreBefore}</em><ChevronDown className={expanded ? "open" : ""} size={16} /></button>{expanded ? <div><p><span>当轮目标</span>{cycle.primaryGoal}</p><p><span>完成任务</span>{cycle.taskSnapshot.filter((task) => task.workflowStatus === "completed").length} 项</p><p><span>AI结论</span>{cycle.aiReview || "没有保存复盘摘要"}</p><p><span>用户选择</span>{cycle.outcome ? outcomeTitle(cycle.outcome) : "未记录"}</p></div> : null}</article>; })}</div>}
       </section>
     </div>
   );
 }
 
-function loadCheckin(projectId: string) {
-  if (typeof window === "undefined") return { lastDate: "", streak: 0 };
-  try {
-    const raw = window.localStorage.getItem(`opc-checkin-${projectId}`);
-    const parsed = raw ? JSON.parse(raw) as { lastDate?: string; streak?: number } : null;
-    return { lastDate: parsed?.lastDate ?? "", streak: Math.max(0, Number(parsed?.streak) || 0) };
-  } catch {
-    return { lastDate: "", streak: 0 };
-  }
+function buildHypothesisRows(project: Project, tasks: ValidationTask[], records: EvidenceRecord[]) {
+  const byMilestone = (id: string) => records.filter((record) => record.milestoneId === id);
+  const completedIn = (id: string) => tasks.some((task) => task.milestoneId === id && task.workflowStatus === "completed");
+  const demand = byMilestone("m1");
+  const trials = byMilestone("m2");
+  const acquisition = byMilestone("m3");
+  const transaction = byMilestone("m4");
+  return [
+    { title: `${project.targetUser || "目标用户"}确实存在当前问题`, status: demand.length >= 1 ? "已支持" : completedIn("m1") ? "证据不足" : "尚未验证", evidence: demand.length ? `${demand.reduce((sum, record) => sum + record.quantity, 0)} 人/次的访谈或意愿记录` : "尚无已确认的需求证据", hasEvidence: demand.length > 0 },
+    { title: "用户愿意上传照片完成换衣体验", status: trials.length >= 1 ? "初步支持" : demand.some((record) => record.behavior.includes("拒绝")) ? "证据不足" : "尚未验证", evidence: trials.length ? `${trials.reduce((sum, record) => sum + record.quantity, 0)} 次已确认试用行为` : "尚未完成真实商品换衣试用", hasEvidence: trials.length > 0 },
+    { title: "换衣结果能够帮助用户改变购买判断", status: trials.some((record) => /改变|帮助|决定/.test(`${record.behavior}${record.userQuote ?? ""}`)) ? "已支持" : completedIn("m2") ? "证据不足" : "尚未验证", evidence: trials.length ? trials[0].behavior : "没有已确认的决策行为记录", hasEvidence: trials.length > 0 },
+    { title: "能够通过低成本渠道获得种子用户", status: acquisition.length >= 1 ? "初步支持" : completedIn("m3") ? "证据不足" : "尚未验证", evidence: acquisition.length ? `${acquisition.reduce((sum, record) => sum + record.quantity, 0)} 个主动反馈或留资行为` : "尚未获得已确认的主动反馈", hasEvidence: acquisition.length > 0 },
+    { title: "个人用户或服装店愿意付费", status: transaction.some((record) => record.type === "payment") ? "已支持" : transaction.length ? "证据不足" : "尚未验证", evidence: transaction.length ? transaction[0].behavior : "尚未完成报价、预订或付款验证", hasEvidence: transaction.length > 0 },
+  ];
 }
 
-const outcomeLabels: Record<CycleOutcome, { kicker: string; title: string; description: string }> = {
-  advance: { kicker: "前进", title: "进入下一创业阶段", description: "关键证据达到门槛，带着当前成果进入更强验证。" },
-  hold: { kicker: "保持", title: "留在当前阶段换路线", description: "项目方向暂不升级，下一轮只更换任务和验证方式。" },
-  return: { kicker: "返回", title: "退回上一阶段修正假设", description: "关键假设被否定，先缩小范围再重新出发。" },
-};
-
-function buildReviewSummary(report: DecisionReport, completed: number, failed: number, newEvidenceCount: number) {
-  if (newEvidenceCount === 0) return "本轮没有新增现实证据，不能因为完成任务就提高项目等级。";
-  if (report.light === "green") return `新增证据已跨过关键门槛，完成 ${completed} 项任务后可以受控前进。`;
-  if (report.light === "red") return `当前投入与证据不匹配，${failed} 项未通过结果说明需要退回修正。`;
-  if (report.light === "blue") return "项目主要问题不是方向，而是缺少外部行动；下一轮必须尽快接触真实用户。";
-  return "方向仍可继续验证，但证据不足以升级；下一轮应集中补最薄弱的行为信号。";
+function buildAiReview(project: Project, records: EvidenceRecord[], completedTasks: ValidationTask[], pendingCount: number) {
+  if (records.length === 0) return { achievement: "尚未形成能够支持项目判断的现实证据。", loweredRisk: "没有风险因任务打勾而自动下降。", highestRisk: "目标用户是否会采取真实行动仍然未知。", summary: "本轮没有已确认证据，不能升级项目判断；下一轮应优先完成一次可复核的用户行动。" };
+  const hasTrial = records.some((record) => record.type === "trial");
+  const hasPayment = records.some((record) => record.type === "payment" || record.type === "quote");
+  const achievement = hasPayment ? "已经获得报价、预订或付款层面的外部信号。" : hasTrial ? "目标用户已经完成真实试用，需求从口头反馈进入行为验证。" : "目标用户的问题获得初步访谈或意愿证据支持。";
+  const loweredRisk = hasTrial ? "用户是否愿意实际体验的风险开始下降。" : "目标用户是否真实存在这个问题，从未知变为初步支持。";
+  const highestRisk = hasPayment ? "用户是否会持续使用并形成可重复交付。" : hasTrial ? "用户是否愿意为换衣结果付费或推荐给他人。" : "用户是否愿意上传照片，并根据换衣结果改变购买决定。";
+  return { achievement, loweredRisk, highestRisk, summary: `本轮完成 ${completedTasks.length} 项已通过任务，形成 ${records.length} 条已确认证据，另有 ${pendingCount} 条需要补证。${achievement}${highestRisk}` };
 }
 
-function roundMatchesReport(round: CalibrationRound, report: DecisionReport, records: EvidenceRecord[]) {
-  return round.light === report.light &&
-    round.evidenceScore === report.evidenceScore &&
-    round.investmentLimit.days === report.investmentLimit.days &&
-    round.investmentLimit.money === report.investmentLimit.money &&
-    round.evidenceRecordIds.length === records.length &&
-    round.evidenceRecordIds.every((id) => records.some((record) => record.id === id)) &&
-    report.roadtestChecks.every((gate) => round.gateStatuses[gate.id] === gate.status);
+function buildGrowthChanges(initial: Project | null, project: Project, records: EvidenceRecord[]) {
+  return [
+    { label: "用户理解", before: initial?.targetUser || "模糊的目标用户", after: project.targetUser || "仍待明确目标用户" },
+    { label: "核心问题", before: initial?.painPoint || "想解决一个宽泛问题", after: project.painPoint || "仍待确认核心问题" },
+    { label: "商业路径", before: initial?.monetization || "尚未确认如何收费", after: project.monetization || "先验证真实行动，再决定收费方式" },
+    { label: "验证能力", before: initial?.existingArtifact || "只有想法", after: records.length ? `已有 ${records.length} 条已确认现实证据` : project.existingArtifact || "尚未形成现实证据" },
+  ];
+}
+
+function buildNextGoal(project: Project, records: EvidenceRecord[]) {
+  if (records.some((record) => record.type === "payment" || record.type === "quote")) return "验证首批用户是否会持续使用，并确认一次交付的时间和成本是否可控。";
+  if (records.some((record) => record.type === "trial")) return "测试个人用户9.9元按次付费与服装店合作意愿，获得至少1次付款、预订或试用承诺。";
+  return `完成5次真实商品换衣试用，验证${project.targetUser || "目标用户"}是否会根据结果改变购买决定。`;
+}
+
+function conclusionTitle(report: DecisionReport, confirmedCount: number) {
+  if (confirmedCount === 0) return "没有证据，暂不升级判断";
+  if (report.light === "green") return "关键证据达到门槛，可以受控前进";
+  if (report.light === "red") return "投入与证据不匹配，需要返回修正";
+  return "保持当前阶段，继续小范围验证";
+}
+
+function conclusionSummary(report: DecisionReport, confirmedCount: number) {
+  if (confirmedCount === 0) return "本轮操作尚未形成已确认证据，不能因为完成任务就提高项目等级。";
+  return report.lightReason;
+}
+
+function stageLabel(stage: Project["currentStage"]) {
+  return { idea: "想法", research: "研究", demo: "演示", mvp: "MVP", growth: "增长" }[stage];
+}
+
+function lightLabel(light: JourneyCycle["lightBefore"]) {
+  return { red: "红灯", yellow: "黄灯", green: "绿灯", blue: "蓝灯" }[light];
+}
+
+function outcomeTitle(outcome: CycleOutcome) {
+  return { advance: "继续前进", hold: "保持阶段并调整路线", return: "返回修正假设" }[outcome];
 }
 
 function formatDelta(value: number) {
-  if (value === 0) return "0";
+  if (value === 0) return "无变化";
   return value > 0 ? `+${value}` : String(value);
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }

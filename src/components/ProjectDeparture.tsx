@@ -3,37 +3,35 @@ import {
   BrainCircuit,
   CarFront,
   Check,
-  ChevronDown,
   Compass,
   Edit3,
-  Library,
   LoaderCircle,
   Route,
   Sparkles,
-  UserRound,
 } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
-import type { ExampleCase } from "../data/examples";
+import { AnimatePresence, motion } from "motion/react";
+import { useMemo, useRef, useState } from "react";
 import { buildFallbackCoachResponse } from "../lib/aiFallback";
-import { requestAiCoach } from "../lib/aiClient";
 import type { AiCoachRequest, AiProjectDraft } from "../lib/aiSchemas";
 import { stageLabels } from "../lib/labels";
 import type { JourneyCycle, Project } from "../types";
-import cockpitVehicle from "../assets/opc-cockpit-vehicle.png";
-import { ProjectVehicle } from "./ProjectVehicle";
+
+type DeparturePhase = "input" | "clarify" | "briefing";
+
+interface ClarificationStep {
+  question: string;
+  hint: string;
+  options: string[];
+}
 
 interface ProjectDepartureProps {
   project: Project;
   onConfirm: (project: Project, initialProject: Project) => void;
-  examples: ExampleCase[];
   onLoadExample: (index: number) => void;
   onReady: () => void;
   activeCycle?: JourneyCycle;
   completedCycles: JourneyCycle[];
 }
-
-type DeparturePhase = "input" | "review" | "packing" | "briefing";
 
 const destinations = [
   "确认问题是否值得做",
@@ -41,22 +39,6 @@ const destinations = [
   "获得首个付费信号",
   "让一人交付可持续",
 ] as const;
-
-const draftFields: Array<{
-  key: keyof AiProjectDraft;
-  label: string;
-  multiline?: boolean;
-}> = [
-  { key: "name", label: "项目名称" },
-  { key: "targetUser", label: "最先服务谁" },
-  { key: "description", label: "项目在做什么", multiline: true },
-  { key: "painPoint", label: "要解决的现实问题", multiline: true },
-  { key: "alternative", label: "用户现在怎么解决" },
-  { key: "acquisition", label: "第一批用户从哪里来" },
-  { key: "monetization", label: "谁为哪个结果付钱" },
-  { key: "existingArtifact", label: "当前已有成果" },
-  { key: "biggestUncertainty", label: "本轮最大不确定性", multiline: true },
-];
 
 const emptyEvidence = {
   interviewCount: 0,
@@ -66,46 +48,90 @@ const emptyEvidence = {
   hasRetention: false,
 };
 
+function buildClarificationSteps(idea: string, draft: AiProjectDraft): ClarificationStep[] {
+  const isTryOnDemo = /试衣|试穿|换衣|穿搭|服装|衣服图|上身效果/.test(idea);
+  if (isTryOnDemo) {
+    return [
+      {
+        question: "第一批先验证哪一类人？",
+        hint: "先缩小对象，才能找到真实样本，不要同时面向所有服装消费者。",
+        options: ["经常网购服装、担心上身效果的年轻女性", "有私域顾客的服装店主", "先验证愿意上传照片的穿搭内容用户"],
+      },
+      {
+        question: "用户最愿意为哪个结果采取行动？",
+        hint: "我们验证的是具体行为，不是“觉得功能有趣”。",
+        options: ["下单前确认衣服是否适合自己", "减少买错后退货或换货", "快速获得一张可分享的试穿效果图"],
+      },
+      {
+        question: "你现在能拿来验证的最小资源是什么？",
+        hint: "不需要先完成产品；一个人工流程或静态页面也可以测试行动意愿。",
+        options: ["可点击的换衣 Demo 或效果图", "先人工生成 3-5 张试穿效果", "5 位可直接联系的目标用户"],
+      },
+    ];
+  }
+
+  return [
+    {
+      question: "第一批最容易联系到、最常遇到问题的人具体是谁？",
+      hint: "目标用户越具体，后续访谈和验证成本越低。",
+      options: [draft.targetUser, "你身边可直接联系到的一小类用户", "已有社群或客户中的高频用户"],
+    },
+    {
+      question: "这个问题最近一次发生时，用户付出了什么代价？",
+      hint: "优先确认发生频率、时间或金钱损失，而不是主观喜欢程度。",
+      options: ["浪费了时间，需要反复手工处理", "产生了直接金钱损失或退货成本", "错过机会，结果不确定且焦虑"],
+    },
+    {
+      question: "你本周能拿来验证的最小资源是什么？",
+      hint: "先用现有资源获得外部反馈，再决定是否投入开发。",
+      options: ["5 位可直接联系的目标用户", "一个原型、页面或人工服务流程", "现有社群、内容渠道或行业联系人"],
+    },
+  ];
+}
+
+function applyClarifications(draft: AiProjectDraft, idea: string, answers: string[]): AiProjectDraft {
+  const isTryOnDemo = /试衣|试穿|换衣|穿搭|服装|衣服图|上身效果/.test(idea);
+  const [targetUser, desiredOutcome, availableResource] = answers;
+  const user = targetUser || draft.targetUser;
+
+  return {
+    ...draft,
+    targetUser: user,
+    painPoint: isTryOnDemo && desiredOutcome
+      ? `${user}希望${desiredOutcome}，但商品图、买家秀和现有试衣方式无法可靠判断自己的上身效果。`
+      : draft.painPoint,
+    existingArtifact: availableResource || draft.existingArtifact,
+    biggestUncertainty: isTryOnDemo
+      ? `${user}是否愿意上传照片，并为“${desiredOutcome || "确认上身效果"}”完成一次试用、留资或付费动作。`
+      : `${user}是否真的会为解决这个问题采取可复核的下一步行动。`,
+  };
+}
+
 export function ProjectDeparture({
   project,
   onConfirm,
-  examples,
   onLoadExample,
   onReady,
   activeCycle,
   completedCycles,
 }: ProjectDepartureProps) {
-  const reduceMotion = useReducedMotion();
-  const compactAnimation = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
   const [phase, setPhase] = useState<DeparturePhase>(() => completedCycles.length > 0 && activeCycle ? "briefing" : "input");
   const [idea, setIdea] = useState(project.description);
-  const [destination, setDestination] = useState<(typeof destinations)[number]>(destinations[0]);
+  const ideaInputRef = useRef<HTMLTextAreaElement>(null);
+  const destination = destinations[0];
   const [draft, setDraft] = useState<AiProjectDraft | null>(null);
-  const [questions, setQuestions] = useState<string[]>([]);
-  const [questionAnswers, setQuestionAnswers] = useState<string[]>([]);
+  const [clarificationRound, setClarificationRound] = useState(0);
+  const [clarificationAnswers, setClarificationAnswers] = useState<string[]>([]);
+  const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [source, setSource] = useState<"ai" | "fallback">("fallback");
-  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showCases, setShowCases] = useState(false);
   const [showGuidedInput, setShowGuidedInput] = useState(false);
   const [guidedIdea, setGuidedIdea] = useState({ user: "", problem: "", method: "", outcome: "", resources: "" });
-  const [editingField, setEditingField] = useState<keyof AiProjectDraft | null>(null);
-  const [showClarification, setShowClarification] = useState(false);
-
-  const luggage = useMemo(() => draft ? [
-    { label: "目标用户", value: draft.targetUser, icon: UserRound },
-    { label: "现实问题", value: draft.painPoint, icon: Compass },
-    { label: "验证目标", value: destination, icon: Route },
-    { label: "最大风险", value: draft.biggestUncertainty, icon: BrainCircuit },
-  ] : [], [draft, destination]);
-
-  useEffect(() => {
-    if (phase !== "packing" || !draft) return;
-    const timer = window.setTimeout(onReady, reduceMotion ? 500 : 5600);
-    return () => window.clearTimeout(timer);
-  }, [draft, onReady, phase, reduceMotion]);
-
+  const clarificationSteps = useMemo(
+    () => draft ? buildClarificationSteps(idea, draft) : [],
+    [draft, idea],
+  );
   async function analyzeIdea(extraContext = "", suppliedIdea = idea) {
     const normalizedIdea = suppliedIdea.trim();
     if (normalizedIdea.length < 8) {
@@ -115,22 +141,19 @@ export function ProjectDeparture({
     setError("");
     setLoading(true);
     const request = buildIntakeRequest(`${normalizedIdea}\n本轮希望：${destination}${extraContext}`);
-    const response = await requestAiCoach(request);
-    const fallback = buildFallbackCoachResponse(request);
-    const nextDraft = response.data.projectDraft ?? fallback.data.projectDraft;
+    const response = buildFallbackCoachResponse(request, "比赛演示预设分析：未连接外部大模型，结果由本地规则稳定生成。");
+    const nextDraft = response.data.projectDraft;
     if (!nextDraft) {
       setError("项目拆解没有返回完整结构，请稍后重试。");
       setLoading(false);
       return;
     }
     setDraft(nextDraft);
-    setQuestions(response.data.questions);
-    setQuestionAnswers(response.data.questions.map(() => ""));
-    setSource(response.source);
-    setNotice(response.notice || response.data.summary);
-    setEditingField(null);
-    setShowClarification(false);
-    setPhase("review");
+    setClarificationRound(0);
+    setClarificationAnswers([]);
+    setClarificationAnswer("");
+    setSource("fallback");
+    setPhase("clarify");
     setLoading(false);
   }
 
@@ -154,60 +177,55 @@ export function ProjectDeparture({
     };
   }
 
-  function updateDraft(key: keyof AiProjectDraft, value: string) {
-    if (!draft) return;
-    setDraft({ ...draft, [key]: value });
-  }
-
-  function applyClarifications() {
-    const context = questions
-      .map((question, index) => questionAnswers[index]?.trim() ? `\n${question}\n回答：${questionAnswers[index].trim()}` : "")
-      .join("");
-    void analyzeIdea(context);
-  }
-
-  function analyzeGuidedIdea() {
+  function importGuidedIdea() {
     const normalized = `我想帮${guidedIdea.user || "一类具体用户"}解决${guidedIdea.problem || "一个反复出现的问题"}，通过${guidedIdea.method || "一个更低成本的方式"}，让他们可以${guidedIdea.outcome || "更快获得明确结果"}${guidedIdea.resources ? `。我目前能使用的资源是：${guidedIdea.resources}` : ""}。`;
     setIdea(normalized);
     setShowGuidedInput(false);
-    void analyzeIdea("", normalized);
+    window.requestAnimationFrame(() => ideaInputRef.current?.focus());
   }
 
-  function confirmAndPack() {
-    if (!draft) return;
-    const nextProject: Project = {
-      ...project,
-      ...draft,
-      id: project.description.trim() === idea.trim() && project.id ? project.id : crypto.randomUUID(),
-      hasDemo: draft.currentStage === "demo" || draft.currentStage === "mvp" || draft.currentStage === "growth",
-    };
-    const initialProject: Project = {
-      ...project,
-      id: nextProject.id,
-      name: "最初的一句话想法",
-      description: idea.trim(),
-      targetUser: "",
-      painPoint: "",
-      alternative: "",
-      acquisition: "",
-      monetization: "",
-      biggestUncertainty: "",
-      existingArtifact: "",
-    };
-    onConfirm(nextProject, initialProject);
-    setPhase("packing");
-    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-  }
+  function submitClarification() {
+    const answer = clarificationAnswer.trim();
+    if (!answer) {
+      setError("请选择一个快捷答案，或补充你自己的答案后再继续。");
+      return;
+    }
 
-  function selectExampleCase(example: ExampleCase) {
-    setIdea(example.project.description || `${example.project.name}，帮助${example.project.targetUser}解决${example.project.painPoint}`);
-    setShowCases(false);
+    const answers = [...clarificationAnswers, answer];
     setError("");
-  }
+    if (clarificationRound === clarificationSteps.length - 1 && draft) {
+      const clarifiedDraft = applyClarifications(draft, idea, answers);
+      setClarificationAnswers(answers);
+      setDraft(clarifiedDraft);
+      setClarificationAnswer("");
+      const nextProject: Project = {
+        ...project,
+        ...clarifiedDraft,
+        id: project.description.trim() === idea.trim() && project.id ? project.id : crypto.randomUUID(),
+        hasDemo: clarifiedDraft.currentStage === "demo" || clarifiedDraft.currentStage === "mvp" || clarifiedDraft.currentStage === "growth",
+      };
+      const initialProject: Project = {
+        ...project,
+        id: nextProject.id,
+        name: "最初的一句话想法",
+        description: idea.trim(),
+        targetUser: "",
+        painPoint: "",
+        alternative: "",
+        acquisition: "",
+        monetization: "",
+        biggestUncertainty: "",
+        existingArtifact: "",
+      };
+      onConfirm(nextProject, initialProject);
+      onReady();
+      return;
+    }
 
-  const activeField = editingField === "currentStage"
-    ? { key: "currentStage" as const, label: "当前阶段", multiline: false }
-    : draftFields.find((field) => field.key === editingField);
+    setClarificationAnswers(answers);
+    setClarificationAnswer("");
+    setClarificationRound((current) => current + 1);
+  }
 
   return (
     <div className="departureScreen departureExperience">
@@ -226,10 +244,11 @@ export function ProjectDeparture({
                   <button className="ghostButton" type="button" onClick={() => setPhase("input")}><Edit3 size={16} />调整项目资料</button>
                 </div>
               </div>
-              <div className="cycleBriefingVehicle">
-                <img className="cockpitVehicleAsset" src={cockpitVehicle} alt="OPC 项目车" />
-                <div><span>已完成轮次</span><strong>{completedCycles.length}</strong><span>历史证据继续保留</span></div>
-              </div>
+              <aside className="cycleBriefingFacts" aria-label="本轮继承信息">
+                <div><span>已完成轮次</span><strong>{completedCycles.length}</strong></div>
+                <div><span>历史证据</span><strong>继续保留</strong></div>
+                <div><span>本轮策略</span><strong>聚焦一个目标</strong></div>
+              </aside>
             </div>
           </motion.section>
         )}
@@ -243,49 +262,26 @@ export function ProjectDeparture({
             exit={{ opacity: 0, y: -12 }}
           >
             <div className="ideaLaunchCopy">
-              <div className="launchSignal"><span /><span /><span /><strong>AI创业验证旅程</strong></div>
-              <h1>把想法装上车，去现实里找到答案。</h1>
-              <p>你只需要说清想法。AI负责拆解风险、规划路线和生成任务，真实反馈决定项目车能否继续前进。</p>
-              <div className="launchWorldBoard" aria-label="创业验证旅行地图预览">
-                <div className="worldBoardTopline"><span>当前路线预览</span><strong>从想法到第一条付费证据</strong></div>
-                <svg viewBox="0 0 620 250" preserveAspectRatio="none" aria-hidden="true">
-                  <defs>
-                    <linearGradient id="launchRoadGlow" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0" stopColor="#58d9ff" />
-                      <stop offset="0.55" stopColor="#39bdf1" />
-                      <stop offset="1" stopColor="#20c86a" />
-                    </linearGradient>
-                  </defs>
-                  <path className="launchTerrain terrainBack" d="M0 146 C88 70 168 118 244 64 C324 8 390 88 458 48 C520 12 572 46 620 6 L620 250 L0 250 Z" />
-                  <path className="launchTerrain terrainFront" d="M0 198 C86 142 154 190 230 142 C320 84 402 178 484 116 C538 76 584 92 620 70 L620 250 L0 250 Z" />
-                  <path className="launchWorldRoad shadow" d="M54 181 C122 181 120 96 192 96 S266 188 332 188 S408 86 470 86 S530 155 578 135" />
-                  <path className="launchWorldRoad glow" d="M54 181 C122 181 120 96 192 96 S266 188 332 188 S408 86 470 86 S530 155 578 135" />
-                  <path className="launchWorldRoad dash" d="M54 181 C122 181 120 96 192 96 S266 188 332 188 S408 86 470 86 S530 155 578 135" />
-                </svg>
-                <div className="launchLandmark village"><i /><span>用户村</span></div>
-                <div className="launchLandmark forest"><i /><span>需求森林</span></div>
-                <div className="launchLandmark port"><i /><span>付费港口</span></div>
-                <div className="launchLandmark factory"><i /><span>交付工厂</span></div>
-                <motion.div className="launchWorldVehicle" animate={{ x: [0, 14, 0] }} transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}>
-                  <ProjectVehicle size="small" loaded={false} />
-                </motion.div>
-                <div className="worldBoardLegend"><span><i className="red" />风险</span><span><i className="yellow" />验证</span><span><i className="green" />通过</span></div>
-              </div>
+              <span className="routeEyebrow">项目起点</span>
+              <h1>从一个想法开始。</h1>
+              <p>说清你想做什么。AI 负责拆解问题、风险和行动路线；是否继续前进，只由真实用户行为决定。</p>
+              <ul className="departureValueList">
+                <li><Sparkles size={16} />AI 把一句话拆成待验证假设</li>
+                <li><Route size={16} />给出低成本、可证伪的行动路线</li>
+                <li><Check size={16} />现实证据决定灯号与下一阶段</li>
+              </ul>
             </div>
 
             <div className="ideaConsole">
               <label className="ideaField">
                 <span>我想做一个</span>
                 <textarea
+                  ref={ideaInputRef}
                   value={idea}
                   onChange={(event) => setIdea(event.target.value)}
                   placeholder="用一句话说清你的想法，例如：帮网购买衣服的年轻女性预览上身效果，减少买错和退货。"
                 />
               </label>
-              <div className="departureGoalRow" aria-label="本轮优先目标">
-                <span>这一轮我最想先</span>
-                <div>{destinations.map((item) => <button className={destination === item ? "selected" : ""} type="button" key={item} onClick={() => setDestination(item)}>{item}</button>)}</div>
-              </div>
               <button className="guidedInputToggle" type="button" onClick={() => setShowGuidedInput((value) => !value)} aria-expanded={showGuidedInput}>
                 <Compass size={16} />不知道怎么写？用引导描述
               </button>
@@ -298,7 +294,7 @@ export function ProjectDeparture({
                     <label>通过<input value={guidedIdea.method} onChange={(event) => setGuidedIdea((current) => ({ ...current, method: event.target.value }))} placeholder="什么方式" /></label>
                     <label>让他们可以<input value={guidedIdea.outcome} onChange={(event) => setGuidedIdea((current) => ({ ...current, outcome: event.target.value }))} placeholder="得到什么结果" /></label>
                     <label className="guidedResource">我目前有的资源<input value={guidedIdea.resources} onChange={(event) => setGuidedIdea((current) => ({ ...current, resources: event.target.value }))} placeholder="选填，例如：5 位店主朋友、设计能力、一个现成 Demo" /></label>
-                    <button className="secondaryButton" type="button" onClick={analyzeGuidedIdea}>用这些信息让 AI 理清</button>
+                    <button className="secondaryButton" type="button" onClick={importGuidedIdea}>一键导入到上方聊天框</button>
                   </motion.section>
                 )}
               </AnimatePresence>
@@ -314,159 +310,50 @@ export function ProjectDeparture({
               </div>
             </div>
 
-            <div className="caseLibraryBar">
-              <div><Library size={17} /><span>不知道怎么写？从案例开始</span></div>
-              <div className="caseQuickList">
-                {examples.slice(0, 3).map((example) => (
-                    <button type="button" key={example.project.id} onClick={() => selectExampleCase(example)}>{example.project.name}</button>
+          </motion.section>
+        )}
+
+        {phase === "clarify" && draft && clarificationSteps[clarificationRound] && (
+          <motion.section key="clarify" className="clarificationJourney" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+            <header className="clarificationJourneyHeader">
+              <div>
+                <span className="manifestStep"><BrainCircuit size={16} />AI 澄清中 · 第 {clarificationRound + 1}/3 轮</span>
+                <h1>每次只确认一个会影响验证路线的问题。</h1>
+                <p>这不是普通聊天。你的回答会决定项目优先服务谁、验证什么，以及先用什么资源获得外部反馈。</p>
+              </div>
+              <div className={`aiSourceMark source-${source}`}><Sparkles size={16} />比赛预设分析流程</div>
+            </header>
+
+            <ol className="clarificationProgress" aria-label="AI 澄清进度">
+              {clarificationSteps.map((step, index) => (
+                <li key={step.question} className={index === clarificationRound ? "active" : index < clarificationRound ? "done" : ""}>
+                  <span>{index < clarificationRound ? <Check size={15} /> : index + 1}</span><b>关键问题 {index + 1}</b>
+                </li>
+              ))}
+            </ol>
+
+            <article className="clarificationQuestionCard">
+              <span>AI 追问</span>
+              <h2>{clarificationSteps[clarificationRound].question}</h2>
+              <p>{clarificationSteps[clarificationRound].hint}</p>
+              <div className="clarificationChoices" aria-label="快捷答案">
+                {clarificationSteps[clarificationRound].options.map((option) => (
+                  <button key={option} type="button" className={clarificationAnswer === option ? "selected" : ""} onClick={() => setClarificationAnswer(option)}>{option}</button>
                 ))}
               </div>
-              <button className="caseLibraryToggle" type="button" onClick={() => setShowCases((value) => !value)} aria-expanded={showCases}>
-                案例库<ChevronDown size={15} />
-              </button>
-            </div>
-
-            <AnimatePresence>
-              {showCases && (
-                <motion.div className="caseLibraryDrawer" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
-                  {examples.map((example) => (
-                    <button type="button" key={example.project.id} onClick={() => selectExampleCase(example)}>
-                      <strong>{example.project.name}</strong>
-                      <span>{stageLabels[example.project.currentStage]}</span>
-                      <p>{example.project.description}</p>
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+              <label className="clarificationCustomAnswer">
+                <span>自己补充（可替代上方选项）</span>
+                <input value={clarificationAnswer} onChange={(event) => setClarificationAnswer(event.target.value)} placeholder="例如：我已有 5 位经常网购服装的朋友愿意试用" />
+              </label>
+              {error && <p className="ideaError">{error}</p>}
+              <footer>
+                <small>已记录 {clarificationAnswers.length} 条回答。AI 不会把这里的回答直接当作真实用户证据。</small>
+                <button className="primaryButton" type="button" onClick={submitClarification}>{clarificationRound === 2 ? <><BrainCircuit size={17} />完成澄清，进入路线总览</> : <><ArrowRight size={17} />确认并进入下一问</>}</button>
+              </footer>
+            </article>
           </motion.section>
         )}
 
-        {phase === "review" && draft && (
-          <motion.section key="review" className="projectManifest" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-            <header className="manifestHeader">
-              <div>
-                <span className="manifestStep"><BrainCircuit size={16} />AI已完成第一次项目拆解</span>
-                <h1>先确认装进车里的东西。</h1>
-                <p>这些是待验证假设，不是已经成立的事实。你只需要修改AI理解错的地方。</p>
-              </div>
-              <div className={`aiSourceMark source-${source}`}><Sparkles size={16} />{source === "ai" ? "AI生成" : "本地稳定拆解"}</div>
-            </header>
-
-            <div className="manifestSummaryGrid">
-              <article className="manifestSummaryCard primary"><span>项目车</span><strong>{draft.name}</strong><p>{draft.description}</p><div><button type="button" onClick={() => setEditingField("name")}>改名称</button><button type="button" onClick={() => setEditingField("description")}>改描述</button></div></article>
-              <article className="manifestSummaryCard"><span>最先服务谁</span><strong>{draft.targetUser}</strong><p>{draft.painPoint}</p><div><button type="button" onClick={() => setEditingField("targetUser")}>改用户</button><button type="button" onClick={() => setEditingField("painPoint")}>改问题</button></div></article>
-              <article className="manifestSummaryCard"><span>现实入口</span><strong>{draft.acquisition}</strong><p>用户当前方案：{draft.alternative}</p><div><button type="button" onClick={() => setEditingField("acquisition")}>改入口</button><button type="button" onClick={() => setEditingField("alternative")}>改替代方案</button></div></article>
-              <article className="manifestSummaryCard warning"><span>本轮最大风险</span><strong>{draft.biggestUncertainty}</strong><p>验证目的地：{destination}</p><div><button type="button" onClick={() => setEditingField("biggestUncertainty")}>修改风险</button></div></article>
-              <article className="manifestSummaryCard"><span>交易与成果</span><strong>{draft.monetization}</strong><p>{draft.existingArtifact || "当前还没有可展示成果"}</p><div><button type="button" onClick={() => setEditingField("monetization")}>改付费</button><button type="button" onClick={() => setEditingField("existingArtifact")}>改成果</button></div></article>
-              <article className="manifestSummaryCard stage"><span>当前阶段</span><strong>{stageLabels[draft.currentStage]}</strong><p>AI会按这个阶段调整任务强度。</p><div><button type="button" onClick={() => setEditingField("currentStage")}>修改阶段</button></div></article>
-            </div>
-
-            <AnimatePresence>
-              {editingField && activeField && (
-                <motion.section className="singleFactEditor" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-                  <div><Edit3 size={17} /><p><strong>只修改：{activeField.label}</strong><span>其余内容保持不变。</span></p><button type="button" onClick={() => setEditingField(null)}>完成</button></div>
-                  {editingField === "currentStage" ? (
-                    <select value={draft.currentStage} onChange={(event) => setDraft({ ...draft, currentStage: event.target.value as AiProjectDraft["currentStage"] })}>
-                      {Object.entries(stageLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-                    </select>
-                  ) : activeField.multiline ? (
-                    <textarea value={String(draft[editingField])} onChange={(event) => updateDraft(editingField, event.target.value)} autoFocus />
-                  ) : (
-                    <input value={String(draft[editingField])} onChange={(event) => updateDraft(editingField, event.target.value)} autoFocus />
-                  )}
-                </motion.section>
-              )}
-            </AnimatePresence>
-
-            {questions.length > 0 && !editingField && (
-              <section className={`clarificationPanel singleClarification ${showClarification ? "open" : ""}`}>
-                <div><strong>AI发现一个仍需确认的关键点</strong><span>{questions[0]}</span></div>
-                {!showClarification ? (
-                  <button type="button" onClick={() => setShowClarification(true)}><Edit3 size={16} />补充这个信息</button>
-                ) : (
-                  <><label><span>你的补充</span><input value={questionAnswers[0] || ""} onChange={(event) => setQuestionAnswers((current) => current.map((value, itemIndex) => itemIndex === 0 ? event.target.value : value))} autoFocus /></label>
-                  <button type="button" onClick={applyClarifications} disabled={loading}>{loading ? <LoaderCircle className="spin" size={16} /> : <Edit3 size={16} />}重新拆解</button></>
-                )}
-              </section>
-            )}
-
-            <footer className="manifestActions">
-              <p>{notice}</p>
-              <div>
-                <button className="ghostButton" type="button" onClick={() => setPhase("input")}>返回修改想法</button>
-                <button className="primaryButton" type="button" onClick={confirmAndPack}><Check size={17} />确认并装车</button>
-              </div>
-            </footer>
-          </motion.section>
-        )}
-
-        {phase === "packing" && draft && (
-          <motion.section key="packing" className="packingScene packingCinematic" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <div className="packingBackdrop" aria-hidden="true"><i /><i /><i /><i /></div>
-            <header className="packingHeader">
-              <div><span>AI 路线规划完成</span><h1>正在把想法装进项目车</h1><p>四项关键假设将成为这次旅程的行李，而不是已经成立的事实。</p></div>
-              <div className="packingDestination"><span>下一站</span><strong>{destination}</strong></div>
-            </header>
-
-            <div className="packingSequence">
-              <motion.article
-                className="packingOriginalIdea"
-                initial={{ opacity: 0, y: 18, scale: 0.97 }}
-                animate={{ opacity: [0, 1, 1, 0.72], y: [18, 0, 0, -8], scale: [0.97, 1, 1, 0.92] }}
-                transition={{ duration: reduceMotion ? 0.01 : 2.1, times: [0, 0.24, 0.72, 1] }}
-              >
-                <span>原始想法</span><p>{idea}</p><small>AI 正在提取可验证结构</small>
-              </motion.article>
-
-              <div className="packingTransfer" aria-label="AI 拆解出的四项关键假设">
-                <svg viewBox="0 0 760 250" preserveAspectRatio="none" aria-hidden="true">
-                  <motion.path
-                    d={compactAnimation ? "M380 20 C380 90 380 150 380 228" : "M44 126 C230 22 440 228 718 126"}
-                    initial={{ pathLength: 0, opacity: 0 }}
-                    animate={{ pathLength: 1, opacity: 1 }}
-                    transition={{ delay: reduceMotion ? 0 : 0.75, duration: reduceMotion ? 0.01 : 1.25 }}
-                  />
-                </svg>
-                {luggage.map((item, index) => {
-                  const Icon = item.icon;
-                  return (
-                    <motion.article
-                      key={item.label}
-                      className={`packingLuggage luggage-${index + 1}`}
-                      initial={{ opacity: 0, scale: 0.86, x: 0, y: compactAnimation ? -24 : 18 }}
-                      animate={{
-                        opacity: reduceMotion ? 1 : [0, 1, 1, 0],
-                        scale: reduceMotion ? 1 : [0.82, 1, 1, 0.36],
-                        x: reduceMotion ? 0 : compactAnimation ? [0, 0, 0, 0] : [0, 0, 0, "34vw"],
-                        y: reduceMotion ? 0 : compactAnimation ? [-24, 0, 0, 150] : [18, 0, 0, 40],
-                      }}
-                      transition={{ delay: reduceMotion ? 0 : 0.55 + index * 0.43, duration: reduceMotion ? 0.01 : 2.65, times: [0, 0.24, 0.68, 1] }}
-                    >
-                      <Icon size={18} /><span>{item.label}</span><strong>{item.value}</strong><i>{String(index + 1).padStart(2, "0")}</i>
-                    </motion.article>
-                  );
-                })}
-              </div>
-
-              <motion.div
-                className="packingVehicleStage"
-                initial={{ x: 0, y: 0 }}
-                animate={{ x: reduceMotion ? 0 : compactAnimation ? [0, 0, 0] : [0, 0, "48vw"], y: reduceMotion ? 0 : compactAnimation ? [0, 0, 170] : [0, 0, -22] }}
-                transition={{ duration: reduceMotion ? 0.01 : 5.25, times: [0, 0.78, 1], ease: [0.65, 0, 0.35, 1] }}
-              >
-                <motion.div initial={{ scale: 0.94, opacity: 1 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}>
-                  <img className="cockpitVehicleAsset packingVehicleAsset" src={cockpitVehicle} alt={`${draft.name}项目车`} />
-                </motion.div>
-                <div className="cargoIndicator"><span>装载进度</span><div>{luggage.map((item, index) => <motion.i key={item.label} initial={{ scale: 0.3, opacity: 0.25 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: reduceMotion ? 0 : 2.6 + index * 0.34 }} />)}</div></div>
-              </motion.div>
-
-              <div className="packingSignal" aria-label="路线已放行"><i /><i /><motion.i initial={{ opacity: 0.25 }} animate={{ opacity: 1, scale: [1, 1.18, 1] }} transition={{ delay: reduceMotion ? 0 : 4.05, duration: 0.8 }} /></div>
-              <motion.div className="packingRoadReveal" initial={{ scaleX: reduceMotion ? 1 : .16 }} animate={{ scaleX: 1 }} transition={{ delay: reduceMotion ? 0 : 1.1, duration: reduceMotion ? 0.01 : 2.9 }}><span /><span /><span /></motion.div>
-            </div>
-            <div className="packingFooter"><span>AI 已完成：拆解项目 · 识别风险 · 规划验证目标</span><button className="packingSkip" type="button" onClick={onReady}>跳过动画<ArrowRight size={16} /></button></div>
-          </motion.section>
-        )}
       </AnimatePresence>
     </div>
   );

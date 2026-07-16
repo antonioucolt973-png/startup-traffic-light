@@ -1,4 +1,4 @@
-import { HardDrive, LogIn, LogOut, Mail, UserRound, X } from "lucide-react";
+import { LogIn, LogOut, Mail, UserRound, X } from "lucide-react";
 import { useState } from "react";
 import type { CloudSession } from "../lib/cloud";
 
@@ -30,8 +30,8 @@ export function AccountMenu({ session, syncState, onRequestSignIn, onSignOut }: 
   return (
     <div className="accountMenu">
       <button className="accountTrigger" type="button" onClick={() => setOpen((value) => !value)}>
-        {session.user ? <UserRound size={16} /> : session.enabled ? <LogIn size={16} /> : <HardDrive size={16} />}
-        <span>{session.user ? "我的项目" : session.enabled ? "登录保存" : "本机已保存"}</span>
+        {session.user ? <UserRound size={16} /> : <LogIn size={16} />}
+        <span>账号</span>
       </button>
       {open && (
         <section className="accountPopover">

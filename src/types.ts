@@ -73,6 +73,12 @@ export interface EvidenceRecord {
   reviewStatus: "pending" | "confirmed" | "rejected";
   origin: "manual" | "survey" | "task" | "legacy";
   rawRecordIds: string[];
+  taskId?: string;
+  milestoneId?: string;
+  attachmentType?: "screenshot" | "file" | "data" | "audio";
+  attachmentName?: string;
+  userQuote?: string;
+  assessment?: string;
 }
 
 export interface SurveyQuestion {
@@ -191,6 +197,17 @@ export interface ValidationTask {
   status: "pending" | "completed" | "failed";
   result: string;
   evidenceIds: string[];
+  milestoneId?: string;
+  milestoneTitle?: string;
+  target?: string;
+  actions?: string[];
+  tools?: Array<{ title: string; content: string }>;
+  duration?: string;
+  estimatedCost?: string;
+  workflowStatus?: "locked" | "ready" | "needs_evidence" | "delayed" | "blocked" | "skipped" | "completed";
+  delayReason?: string;
+  delayedUntil?: string;
+  difficulty?: string;
 }
 
 export interface CalibrationRound {

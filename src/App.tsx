@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Backpack, CarFront, ClipboardCheck, Flag, Flame, LayoutGrid, Map, RotateCcw, Route, Sparkles } from "lucide-react";
+import { Backpack, BellRing, CarFront, ClipboardCheck, Flag, Flame, LayoutGrid, Map, RotateCcw, Route, Sparkles, UsersRound } from "lucide-react";
 import { EvidenceBackpack } from "./components/EvidenceBackpack";
 import { EvidenceRefill } from "./components/EvidenceRefill";
 import { GateChallenge } from "./components/GateChallenge";
-import { JourneyMapScreen } from "./components/JourneyMapScreen";
 import { JourneyStatusBar } from "./components/JourneyStatusBar";
 import { NextRoute } from "./components/NextRoute";
 import { ProjectDeparture } from "./components/ProjectDeparture";
+import { RouteOverview, type InitialValidationRoute } from "./components/RouteOverview";
 import { AccountMenu } from "./components/AccountMenu";
 import { ProjectVehicle } from "./components/ProjectVehicle";
 import { exampleCases } from "./data/examples";
@@ -18,7 +18,6 @@ import {
   normalizeProject,
   plansToRoadtestPlan,
 } from "./lib/decisionEngine";
-import { createCalibrationRound, createValidationTasks } from "./lib/calibration";
 import { ensureActiveCycle, transitionJourneyCycle } from "./lib/cycleEngine";
 import {
   createEmptyWorkspace,
@@ -37,7 +36,6 @@ import {
 } from "./lib/cloud";
 import type {
   CycleOutcome,
-  GateId,
   Project,
   ProjectWorkspace,
 } from "./types";
@@ -47,18 +45,16 @@ type ViewId = "departure" | "map" | "gate" | "backpack" | "route" | "refill";
 const views: Array<{ id: ViewId; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { id: "departure", label: "项目出发", icon: Flag },
   { id: "map", label: "路线总览", icon: Map },
-  { id: "gate", label: "路口与红队", icon: Route },
+  { id: "gate", label: "路口决策", icon: Route },
+  { id: "route", label: "任务执行", icon: ClipboardCheck },
   { id: "backpack", label: "证据背包", icon: Backpack },
-  { id: "route", label: "任务路线", icon: ClipboardCheck },
   { id: "refill", label: "成长回顾", icon: RotateCcw },
 ];
 
 export default function App() {
   const [workspace, setWorkspaceState] = useState<ProjectWorkspace>(() => loadWorkspace());
   const [activeView, setActiveView] = useState<ViewId>("departure");
-  const [activeGate, setActiveGate] = useState<GateId>("user");
-  const [copyState, setCopyState] = useState("复制报告");
-  const [saveState, setSaveState] = useState("重新校准");
+  const [focusedTaskId, setFocusedTaskId] = useState<string>();
   const [cloudSession, setCloudSession] = useState<CloudSession>({ user: null, enabled: false });
   const [syncState, setSyncState] = useState("本地游客数据");
   const initialWorkspaceRef = useRef(workspace);
@@ -72,6 +68,14 @@ export default function App() {
   const activeCycle = useMemo(
     () => workspace.cycles.find((cycle) => cycle.id === workspace.activeCycleId),
     [workspace.activeCycleId, workspace.cycles],
+  );
+  const completedTaskCount = workspace.tasks.filter((task) => task.status === "completed").length;
+  const progressTotal = Math.max(workspace.tasks.length, 3);
+  const confirmedEvidenceCount = workspace.evidenceRecords.filter((record) => record.reviewStatus === "confirmed").length;
+  const actionEnergy = Math.min(100, 20 + completedTaskCount * 15 + confirmedEvidenceCount * 5);
+  const coachPrompt = useMemo(
+    () => buildCoachPrompt(activeView, workspace.tasks, workspace.evidenceRecords, activeCycle?.primaryGoal, report.nextActions[0]),
+    [activeCycle?.primaryGoal, activeView, report.nextActions, workspace.evidenceRecords, workspace.tasks],
   );
 
   useEffect(() => {
@@ -121,16 +125,52 @@ export default function App() {
     });
   }
 
-  function confirmProject(project: Project, initialProject: Project) {
+  function confirmProject(project: Project, initialProject: Project, initialRoute?: InitialValidationRoute) {
     const normalized = normalizeProject(project);
-    updateWorkspace((current) => current.project.id !== normalized.id
-      ? { ...createEmptyWorkspace(normalized), initialProject: normalizeProject(initialProject) }
-      : {
+    const selectedPlans = initialRoute ? normalizeGatePlans({
+      ...emptyGatePlans,
+      user: {
+        audience: initialRoute.audience,
+        action: initialRoute.action,
+        deadline: initialRoute.deadline,
+        passCriteria: initialRoute.passCriteria,
+        stopCriteria: initialRoute.stopCriteria,
+      },
+    }) : undefined;
+    updateWorkspace((current) => {
+      if (current.project.id !== normalized.id) {
+        const next = createEmptyWorkspace(normalized);
+        return {
+          ...next,
+          initialProject: normalizeProject(initialProject),
+          plans: selectedPlans ?? next.plans,
+        };
+      }
+      return {
         ...current,
         project: normalized,
         initialProject: current.initialProject ?? normalizeProject(initialProject),
+        plans: selectedPlans ?? current.plans,
         tasks: projectInputsChanged(current.project, normalized) ? [] : current.tasks,
-      });
+      };
+    });
+  }
+
+  function confirmRouteAndEnterDecision(route: InitialValidationRoute) {
+    updateWorkspace((current) => ({
+      ...current,
+      plans: normalizeGatePlans({
+        ...current.plans,
+        user: {
+          audience: route.audience,
+          action: route.action,
+          deadline: route.deadline,
+          passCriteria: route.passCriteria,
+          stopCriteria: route.stopCriteria,
+        },
+      }),
+    }));
+    navigate("gate");
   }
 
   function loadExample(index: number) {
@@ -140,31 +180,7 @@ export default function App() {
     next.evidenceRecords = evidenceSummaryToRecords(example.project.id, example.evidence);
     next.plans = normalizeGatePlans(emptyGatePlans);
     replaceWorkspace(next);
-    setActiveGate("user");
     navigate("map");
-  }
-
-  function enterGate(gate: GateId = activeGate) {
-    setActiveGate(gate);
-    navigate("gate");
-  }
-
-  function updateActivePlan(plan: ProjectWorkspace["plans"][GateId]) {
-    updateWorkspace((current) => ({ ...current, plans: { ...current.plans, [activeGate]: plan } }));
-  }
-
-  function addEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
-    updateWorkspace((current) => ({
-      ...current,
-      evidenceRecords: [{ ...record, cycleId: record.cycleId || current.activeCycleId || undefined }, ...current.evidenceRecords],
-    }));
-  }
-
-  function saveSurvey(survey: ProjectWorkspace["surveys"][number]) {
-    updateWorkspace((current) => ({
-      ...current,
-      surveys: [{ ...survey, cycleId: survey.cycleId || current.activeCycleId || undefined }, ...current.surveys.filter((item) => item.id !== survey.id && !(item.gateId === survey.gateId && item.status === "published"))],
-    }));
   }
 
   function updateEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
@@ -174,18 +190,11 @@ export default function App() {
     }));
   }
 
-  function removeEvidenceRecord(recordId: string) {
+  function excludeEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
     updateWorkspace((current) => ({
       ...current,
-      evidenceRecords: current.evidenceRecords.filter((record) => record.id !== recordId),
-      tasks: current.tasks.map((task) => ({ ...task, evidenceIds: task.evidenceIds.filter((id) => id !== recordId) })),
-    }));
-  }
-
-  function addRedTeamTurn(turn: ProjectWorkspace["redTeamTurns"][number]) {
-    updateWorkspace((current) => ({
-      ...current,
-      redTeamTurns: [...current.redTeamTurns, { ...turn, cycleId: turn.cycleId || current.activeCycleId || undefined }].slice(-24),
+      evidenceRecords: current.evidenceRecords.map((item) => item.id === record.id ? { ...item, reviewStatus: "rejected", assessment: "用户将该记录标记为无效证据，已从证据充分度中排除。" } : item),
+      tasks: current.tasks.map((task) => task.id === record.taskId && task.workflowStatus === "completed" ? { ...task, status: "pending", workflowStatus: "needs_evidence" } : task),
     }));
   }
 
@@ -193,48 +202,46 @@ export default function App() {
     updateWorkspace((current) => ({ ...current, tasks: current.tasks.map((item) => item.id === task.id ? task : item) }));
   }
 
-  function resetTasks() {
+  function submitTaskEvidence(task: ProjectWorkspace["tasks"][number], record: ProjectWorkspace["evidenceRecords"][number], unlockNext: boolean) {
     updateWorkspace((current) => {
-      const currentReport = buildWorkspaceReport(current);
-      return { ...current, tasks: createValidationTasks(current.project.id, currentReport, current.activeCycleId || undefined) };
+      const taskIndex = current.tasks.findIndex((item) => item.id === task.id);
+      const tasks = current.tasks.map((item, index) => {
+        if (item.id === task.id) return { ...task, cycleId: task.cycleId || current.activeCycleId || undefined };
+        if (unlockNext && index === taskIndex + 1 && item.workflowStatus === "locked") return { ...item, workflowStatus: "ready" as const };
+        return item;
+      });
+      return {
+        ...current,
+        tasks,
+        evidenceRecords: [{ ...record, cycleId: record.cycleId || current.activeCycleId || undefined }, ...current.evidenceRecords],
+      };
     });
   }
 
-  function replaceTasks(tasks: ProjectWorkspace["tasks"]) {
+  function unlockNextTask(taskId: string) {
+    updateWorkspace((current) => {
+      const taskIndex = current.tasks.findIndex((task) => task.id === taskId);
+      return { ...current, tasks: current.tasks.map((task, index) => index === taskIndex + 1 && task.workflowStatus === "locked" ? { ...task, workflowStatus: "ready" as const } : task) };
+    });
+  }
+
+  function openTask(taskId?: string) {
+    setFocusedTaskId(taskId);
+    navigate("route");
+  }
+
+  function enterTaskExecution(tasks: ProjectWorkspace["tasks"]) {
     updateWorkspace((current) => ({
       ...current,
       tasks: tasks.map((task) => ({ ...task, cycleId: task.cycleId || current.activeCycleId || undefined })),
     }));
+    setFocusedTaskId(tasks[0]?.id);
+    navigate("route");
   }
 
-  async function copyReport() {
-    try {
-      const taskNotes = workspace.tasks.length > 0
-        ? `\n## 任务执行记录\n${workspace.tasks.map((task) => `- 第 ${task.day} 天：${task.status === "completed" ? "已完成" : task.status === "failed" ? "未通过" : "待执行"}${task.result ? `；结果：${task.result}` : ""}`).join("\n")}`
-        : "";
-      await navigator.clipboard.writeText(`${report.markdown}${taskNotes}`);
-      setCopyState("已复制");
-    } catch {
-      setCopyState("复制失败");
-    }
-    window.setTimeout(() => setCopyState("复制报告"), 1600);
-  }
-
-  function saveCurrentCalibration() {
-    updateWorkspace((current) => {
-      const currentReport = buildWorkspaceReport(current);
-      const round = createCalibrationRound(current, currentReport, current.rounds[0]);
-      return { ...current, rounds: [round, ...current.rounds].slice(0, 12) };
-    });
-    setSaveState("校准已保存");
-    window.setTimeout(() => setSaveState("重新校准"), 1600);
-  }
-
-  function startNextCycle(outcome: CycleOutcome, aiReview: string) {
-    const next = transitionJourneyCycle(workspace, report, outcome, aiReview);
-    const nextCycle = next.cycles.find((cycle) => cycle.id === next.activeCycleId);
+  function startNextCycle(outcome: CycleOutcome, aiReview: string, nextGoal: string) {
+    const next = transitionJourneyCycle(workspace, report, outcome, aiReview, nextGoal);
     replaceWorkspace(next);
-    setActiveGate(nextCycle?.focusGate ?? "user");
     setActiveView("departure");
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }
@@ -246,18 +253,18 @@ export default function App() {
           <span className="brandSignal" aria-hidden="true"><i /><i /><i /></span>
           <span><strong>OPC创业红绿灯</strong><small>AI验证陪跑系统</small></span>
         </button>
+        <nav className="topWorkspaceNav" aria-label="全局导航">
+          <button className="active" type="button" onClick={() => navigate("departure")}><LayoutGrid size={15} />工作台</button>
+          <button type="button" title="项目列表将在账号系统上线后开放"><Flag size={15} />我的项目</button>
+        </nav>
         <div className="headerUtilities">
-          <button className="headerProject" type="button" onClick={() => navigate("departure")}>
-            <Sparkles size={15} /><span>{workspace.project.name || "当前项目"}</span>
-          </button>
-          <button className="headerProjects" type="button" title="项目列表将在账号保存上线后开放"><LayoutGrid size={15} />我的项目</button>
           <AccountMenu
             session={cloudSession}
             syncState={syncState}
             onRequestSignIn={requestEmailSignIn}
             onSignOut={signOutCloud}
           />
-          <button className="proEntry" type="button" title="Pro 能力入口，暂不收费"><Sparkles size={15} />Pro</button>
+          <button className="proEntry" type="button" title="Pro 能力将在后续版本开放"><Sparkles size={15} /><span>Pro</span><small>即将开放</small></button>
         </div>
       </header>
 
@@ -280,9 +287,18 @@ export default function App() {
             <small>{workspace.project.description ? "已装载，等待现实反馈" : "输入一句想法即可启程"}</small>
           </article>
           <article className="sidebarEnergy">
-            <Flame size={17} /><div><span>行动能量</span><strong>{Math.min(100, 20 + workspace.tasks.filter((task) => task.status === "completed").length * 15 + workspace.evidenceRecords.length * 5)}</strong></div><em>/100</em>
+            <Flame size={17} /><div><span>行动能量</span><strong>{actionEnergy}</strong></div><em>/100</em>
           </article>
-          <button className="sidebarGarage" type="button" title="车辆成长与车库将在后续版本开放"><CarFront size={16} />项目车库 · 即将开放</button>
+          <article className="sidebarProgress" aria-label="本轮进度">
+            <div><span>本轮进度</span><strong>{completedTaskCount}/{progressTotal}</strong></div>
+            <i><b style={{ width: `${Math.min(100, Math.round(completedTaskCount / progressTotal * 100))}%` }} /></i>
+            <small>完成现实任务后，项目车才会继续前进。</small>
+          </article>
+          <div className="sidebarFutureLinks" aria-label="后续能力入口">
+            <button type="button" title="车辆成长与车库将在后续版本开放"><CarFront size={15} />项目车库<small>即将开放</small></button>
+            <button type="button" title="任务提醒将在后续版本开放"><BellRing size={15} />提醒设置<small>即将开放</small></button>
+            <button type="button" title="团队协作将在后续版本开放"><UsersRound size={15} />团队协作<small>即将开放</small></button>
+          </div>
         </aside>
 
         <div className={`journeyWorkspace view-${activeView}`}>
@@ -291,7 +307,6 @@ export default function App() {
             <ProjectDeparture
               project={workspace.project}
               onConfirm={confirmProject}
-              examples={exampleCases}
               onLoadExample={loadExample}
               onReady={() => navigate("map")}
               activeCycle={activeCycle}
@@ -299,76 +314,53 @@ export default function App() {
             />
           )}
           {activeView === "map" && (
-            <JourneyMapScreen
+            <RouteOverview
               project={workspace.project}
-              report={report}
-              activeGate={activeGate}
-              onGateChange={setActiveGate}
-              onEnterGate={() => enterGate()}
-              activeCycle={activeCycle}
+              initialProject={workspace.initialProject}
+              onBack={() => navigate("departure")}
+              onConfirmRoute={confirmRouteAndEnterDecision}
             />
           )}
           {activeView === "gate" && (
             <GateChallenge
               project={workspace.project}
-              report={report}
-              evidence={evidence}
-              activeGate={activeGate}
-              onActiveGateChange={setActiveGate}
-              plan={workspace.plans[activeGate]}
-              onPlanChange={updateActivePlan}
-              turns={workspace.redTeamTurns}
-              onAddTurn={addRedTeamTurn}
-              onOpenBackpack={() => navigate("backpack")}
-              userId={cloudSession.user?.id}
-              surveys={workspace.surveys}
-              onSaveSurvey={saveSurvey}
-              onAddEvidence={addEvidenceRecord}
+              selectedRoute={workspace.plans.user}
+              onEnterTasks={enterTaskExecution}
             />
           )}
           {activeView === "backpack" && (
             <EvidenceBackpack
-              project={workspace.project}
               records={workspace.evidenceRecords}
-              onAdd={addEvidenceRecord}
-              onRemove={removeEvidenceRecord}
+              tasks={workspace.tasks}
               onUpdate={updateEvidenceRecord}
+              onExclude={excludeEvidenceRecord}
+              onOpenTask={openTask}
             />
           )}
           {activeView === "route" && (
             <NextRoute
-              report={report}
               project={workspace.project}
-              evidence={evidence}
               records={workspace.evidenceRecords}
               tasks={workspace.tasks}
-              rounds={workspace.rounds}
-              redTeamTurns={workspace.redTeamTurns}
-              onCopy={copyReport}
-              copyState={copyState}
-              onResetTasks={resetTasks}
-              onReplaceTasks={replaceTasks}
-              onOpenRefill={() => navigate("refill")}
-              onOpenRedTeam={() => navigate("gate")}
-              initialProject={workspace.initialProject}
-              surveys={workspace.surveys}
+              initialTaskId={focusedTaskId}
+              onUpdateTask={updateTask}
+              onSubmitEvidence={submitTaskEvidence}
+              onUnlockNext={unlockNextTask}
+              onOpenBackpack={() => navigate("backpack")}
             />
           )}
           {activeView === "refill" && (
             <EvidenceRefill
               report={report}
               project={workspace.project}
-              evidence={evidence}
+              initialProject={workspace.initialProject}
               tasks={workspace.tasks}
               records={workspace.evidenceRecords}
               rounds={workspace.rounds}
               activeCycle={activeCycle}
               completedCycles={workspace.cycles.filter((cycle) => cycle.status === "completed")}
-              onTaskChange={updateTask}
               onOpenBackpack={() => navigate("backpack")}
-              onRecalibrate={saveCurrentCalibration}
               onStartNextCycle={startNextCycle}
-              saveState={saveState}
             />
           )}
           </section>
@@ -378,7 +370,7 @@ export default function App() {
           <JourneyStatusBar project={workspace.project} report={report} activeCycle={activeCycle} />
           <article className="aiPromptCard">
             <Sparkles size={17} />
-            <div><span>AI 陪跑提示</span><strong>{report.nextActions[0] || "先输入一句想法，让 AI 帮你拆成可行动的路线。"}</strong></div>
+            <div><span>AI 陪跑提示 · {coachPrompt.label}</span><strong>{coachPrompt.message}</strong></div>
           </article>
         </aside>
       </div>
@@ -409,4 +401,61 @@ function projectInputsChanged(previous: Project, current: Project) {
     "currentStage",
     "existingArtifact",
   ].some((key) => previous[key as keyof Project] !== current[key as keyof Project]);
+}
+
+function buildCoachPrompt(
+  activeView: ViewId,
+  tasks: ProjectWorkspace["tasks"],
+  records: ProjectWorkspace["evidenceRecords"],
+  cycleGoal: string | undefined,
+  fallback: string | undefined,
+) {
+  const needsEvidence = tasks.find((task) => task.workflowStatus === "needs_evidence");
+  if (needsEvidence) return {
+    label: "需要补证",
+    message: `“${compactTaskTitle(needsEvidence.title)}”证据不足，请补充用户原话、有效数量和可复核材料。`,
+  };
+
+  const blocked = tasks.find((task) => task.workflowStatus === "blocked");
+  if (blocked) return {
+    label: "任务受阻",
+    message: `“${compactTaskTitle(blocked.title)}”遇到困难。先缩小样本或更换触达方式，不要直接增加开发投入。`,
+  };
+
+  const delayed = tasks.find((task) => task.workflowStatus === "delayed");
+  if (delayed) return {
+    label: "任务延期",
+    message: `“${compactTaskTitle(delayed.title)}”已延期${delayed.delayedUntil ? `至 ${delayed.delayedUntil}` : ""}，到期前准备好对象和执行材料。`,
+  };
+
+  const pendingEvidence = records.filter((record) => record.reviewStatus === "pending");
+  if (activeView === "backpack" && pendingEvidence.length > 0) return {
+    label: "背包待处理",
+    message: `证据背包有 ${pendingEvidence.length} 条记录需要补证。优先返回对应任务补齐材料。`,
+  };
+
+  if (activeView === "refill") return {
+    label: "下一轮目标",
+    message: cycleGoal || "根据本轮已确认证据，确认下一轮只验证一个最高风险假设。",
+  };
+
+  const ready = tasks.find((task) => task.workflowStatus === "ready" || (!task.workflowStatus && task.status === "pending"));
+  if (ready) return {
+    label: "当前任务",
+    message: `${compactTaskTitle(ready.title)}。完成真实行动并提交证据后，才会解锁下一任务。`,
+  };
+
+  if (tasks.length > 0 && tasks.every((task) => task.workflowStatus === "completed" || task.workflowStatus === "skipped")) return {
+    label: "本轮已结算",
+    message: "本轮任务已经处理完毕，请进入成长回顾，结算假设并选择下一轮方向。",
+  };
+
+  return {
+    label: "当前重点",
+    message: fallback || "先输入一句想法，让 AI 帮你拆成可行动的路线。",
+  };
+}
+
+function compactTaskTitle(title: string) {
+  return title.replace(/^M\d+[^·]*·\s*/, "").replace(/^第\s*\d+\s*天\s*·\s*/, "");
 }
