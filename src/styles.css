@@ -2670,3 +2670,116 @@ body { background: var(--canvas) !important; color: var(--ink) !important; }
   .worldBoardTopline { left: 12px; right: 12px; gap: 8px; }
   .worldBoardTopline strong { max-width: 150px; text-align: right; font-size: 9px; }
 }
+
+/* Phase 2: AI planning workbench and commercial milestone map. */
+.roadmapScreen { display: grid; gap: 18px; }
+.roadmapHero { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 24px; align-items: stretch; padding: clamp(24px, 3vw, 42px) !important; }
+.roadmapHero > div { display: grid; align-content: start; gap: 11px; }
+.roadmapHero h1 { max-width: 780px; margin: 0; color: #173029 !important; font-size: clamp(34px, 4vw, 54px) !important; line-height: 1.12; }
+.roadmapHero p { max-width: 720px; margin: 0; font-size: 15px; line-height: 1.7; }
+.routeEyebrow { display: inline-flex; align-items: center; gap: 7px; color: #267eae !important; font-size: 12px; font-weight: 900; }
+.roadmapLight { display: grid; align-content: start; gap: 7px; padding: 18px; border: 1px solid #f0d48c; border-radius: 9px; background: #fffaf0; }
+.roadmapLight > span { color: #7d6a3a; font-size: 11px; font-weight: 800; }
+.roadmapLight strong { color: #4b3d13 !important; font-size: 27px; }
+.roadmapLight p { color: #8b7747 !important; font-size: 12px; }
+.roadmapLight > div { display: flex; gap: 8px; margin-top: auto; }
+.roadmapLight i { width: 24px; height: 24px; border-radius: 50%; background: #e7e4d9; }
+.roadmapLight.light-red i:first-child { background: var(--red); }
+.roadmapLight.light-yellow i:nth-child(2) { background: var(--yellow); }
+.roadmapLight.light-green i:nth-child(3) { background: var(--green); }
+.roadmapLight.light-blue i:nth-child(4) { background: var(--blue); }
+
+.aiPlanningWorkbench { padding: 18px; border: 1px solid #cfe2fb; border-radius: 10px; background: linear-gradient(135deg, #f9fcff, #eef7ff); }
+.aiPlanningWorkbench > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.aiPlanningWorkbench > header > div { display: inline-flex; align-items: center; gap: 8px; color: #1f6eae; font-size: 15px; font-weight: 900; }
+.aiPlanningWorkbench > header small { color: #6586a2; font-size: 11px; }
+.aiPlanningGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.aiPlanningGrid article { min-height: 142px; display: grid; align-content: start; gap: 8px; padding: 14px; border: 1px solid #dce9f4; border-radius: 8px; background: rgba(255, 255, 255, .88); }
+.aiPlanningGrid article > span { color: #557a99; font-size: 11px; font-weight: 900; }
+.aiPlanningGrid ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.aiPlanningGrid li { position: relative; padding-left: 11px; color: #37556d !important; font-size: 12px; line-height: 1.45; }
+.aiPlanningGrid li::before { content: ""; position: absolute; left: 0; top: 7px; width: 4px; height: 4px; border-radius: 50%; background: #368fd5; }
+.aiPlanningGrid strong { color: #1d405d !important; font-size: 14px; line-height: 1.45; }
+.aiPlanningGrid p { margin: 0; color: #5b7488 !important; font-size: 12px; line-height: 1.5; }
+.aiPlanningGrid .risk { border-top: 3px solid #e9b542; }
+.aiPlanningGrid .focus { border-top: 3px solid #5b98d4; }
+.aiPlanningGrid .action { border-top: 3px solid #21b66f; }
+.aiPlanningGrid button { align-self: end; justify-self: start; display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: #147aaf; font-size: 12px; font-weight: 900; }
+
+.commercialRoadmap { padding: 20px; border: 1px solid #d8e5dd; border-radius: 10px; background: #fff; box-shadow: var(--shadow); }
+.commercialRoadmap > header, .commercialRoadmap > footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.commercialRoadmap > header > div:first-child { display: grid; gap: 4px; }
+.commercialRoadmap > header span { color: #25845b; font-size: 11px; font-weight: 900; }
+.commercialRoadmap h2 { margin: 0; color: #173029; font-size: 23px; }
+.roadmapHeaderStats { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0 7px; padding: 9px 12px; border-radius: 8px; background: #f2faf5; }
+.roadmapHeaderStats strong { grid-row: 1 / 3; color: #1d9a5c; font-size: 28px; }
+.roadmapHeaderStats strong small { font-size: 12px; }
+.roadmapHeaderStats span { color: #5c7668; font-size: 10px; }
+.roadmapCanvas { height: 346px; margin: 16px 0; overflow: hidden; border: 1px solid #dbe9e1; border-radius: 9px; background: radial-gradient(circle at 78% 20%, #f2fff5, transparent 36%), #fbfdfc; }
+.roadmapCanvas .react-flow__pane { cursor: default; }
+.roadmapCanvas .react-flow__node { width: 215px; }
+.roadmapCanvas .react-flow__edge-path { stroke-linecap: round; }
+.milestoneNode { width: 215px; padding: 12px; border: 1px solid #dbe7e0; border-radius: 8px; background: #fff; box-shadow: 0 5px 14px rgba(40, 77, 58, .08); }
+.milestoneNode.state-active { border: 2px solid #2c9cdf; box-shadow: 0 0 0 3px rgba(44, 156, 223, .11), 0 8px 18px rgba(40, 77, 58, .1); }
+.milestoneNode.state-completed { border-color: #8bd6aa; background: #f5fff8; }
+.milestoneNode.state-locked { opacity: .72; background: #fbfcfb; }
+.milestoneNode > button { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; text-align: left; }
+.milestoneNodeIcon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; background: #e9f4ff; color: #2678c5; }
+.state-completed .milestoneNodeIcon { background: #e7f8ed; color: #1b9a58; }
+.state-locked .milestoneNodeIcon { background: #eff2f0; color: #8ba097; }
+.milestoneNodeCopy { min-width: 0; display: grid; gap: 1px; }
+.milestoneNodeCopy small { color: #6a8275; font-size: 9px; font-weight: 800; }
+.milestoneNodeCopy strong { overflow: hidden; color: #244235; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.milestoneNodeCopy em { color: #8aa095; font-size: 10px; font-style: normal; }
+.milestoneDone { color: #1da45e; }
+.milestoneNode p { min-height: 34px; margin: 10px 0 7px; color: #5d7468; font-size: 11px; line-height: 1.45; }
+.milestoneNode ul { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+.milestoneNode li { color: #477162; font-size: 10px; line-height: 1.35; }
+.milestoneNode li::before { content: "·"; margin-right: 4px; color: #1fae68; font-weight: 900; }
+.commercialRoadmap > footer { align-items: end; padding: 14px 4px 0; border-top: 1px solid #e4ece7; }
+.commercialRoadmap > footer > div { display: grid; gap: 3px; }
+.commercialRoadmap > footer span { color: #6f8579; font-size: 11px; font-weight: 800; }
+.commercialRoadmap > footer strong { color: #254739; font-size: 15px; }
+.commercialRoadmap > footer p { margin: 0; color: #60776a; font-size: 12px; }
+
+.routeStationPanel { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(190px, .75fr) auto; align-items: center; gap: 14px; padding: 18px; border: 1px solid #dbe6df; border-left: 4px solid var(--orange); border-radius: 9px; background: #fff; }
+.routeStationIcon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 8px; background: var(--orange-soft); color: #c87214; }
+.routeStationPanel > div { min-width: 0; display: grid; gap: 4px; }
+.routeStationPanel span { color: #788b80; font-size: 11px; font-weight: 800; }
+.routeStationPanel strong { color: #243d31; font-size: 16px; }
+.routeStationPanel p { margin: 0; color: #60766a; font-size: 12px; line-height: 1.55; }
+.routeStationStatus { padding-left: 14px; border-left: 1px solid #e5ece7; }
+.routeStationStatus span { color: #b17412; }
+.roadmapProgressFooter { display: flex; flex-wrap: wrap; gap: 10px; }
+.roadmapProgressFooter > div { display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 8px; padding: 11px 13px; border: 1px solid #e2eae5; border-radius: 8px; background: #fff; }
+.roadmapProgressFooter svg { grid-row: 1 / 3; color: #3c8dc9; }
+.roadmapProgressFooter span { color: #73877c; font-size: 10px; font-weight: 800; }
+.roadmapProgressFooter strong { color: #344f41; font-size: 12px; }
+
+@media (max-width: 1050px) {
+  .aiPlanningGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .routeStationPanel { grid-template-columns: auto minmax(0, 1fr); }
+  .routeStationStatus { grid-column: 2; padding-left: 0; border-left: 0; }
+  .routeStationPanel > button { grid-column: 2; justify-self: start; }
+}
+@media (max-width: 700px) {
+  .roadmapHero { grid-template-columns: 1fr; padding: 22px 18px !important; }
+  .roadmapHero h1 { font-size: 32px !important; }
+  .roadmapLight { grid-template-columns: 1fr auto; align-items: center; }
+  .roadmapLight > div { grid-column: 1 / -1; }
+  .aiPlanningWorkbench { padding: 14px; }
+  .aiPlanningWorkbench > header { align-items: flex-start; flex-direction: column; }
+  .aiPlanningGrid { grid-template-columns: 1fr; }
+  .aiPlanningGrid article { min-height: auto; }
+  .commercialRoadmap { padding: 14px; }
+  .commercialRoadmap > header { align-items: flex-start; }
+  .commercialRoadmap h2 { font-size: 18px; }
+  .roadmapCanvas { height: 610px; }
+  .roadmapCanvas .react-flow__node { width: 210px; }
+  .commercialRoadmap > footer { align-items: flex-start; flex-direction: column; }
+  .commercialRoadmap > footer .primaryButton { width: 100%; }
+  .routeStationPanel { grid-template-columns: 1fr; }
+  .routeStationIcon { display: none; }
+  .routeStationStatus, .routeStationPanel > button { grid-column: auto; }
+  .routeStationPanel > button { width: 100%; }
+}
