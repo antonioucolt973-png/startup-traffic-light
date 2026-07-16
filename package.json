@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
     "verify:p0": "node --experimental-strip-types scripts/verify-p0.ts",
+    "mcp:server": "node mcp/server.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {

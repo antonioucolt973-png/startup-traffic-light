@@ -16,6 +16,16 @@ npm run verify:p0
 npm run build
 ```
 
+## MCP 服务（比赛提交）
+
+项目包含一个零依赖、可本地启动的 MCP stdio 服务，提供项目拆解、路线建议和证据缺口校准工具：
+
+```bash
+npm run mcp:server
+```
+
+详细工具与客户端配置见 [mcp/README.md](mcp/README.md)。MCP 只提供结构化建议；灯号、投入上限和停止条件仍由网页规则引擎决定。
+
 ## 环境变量
 
 复制 `.env.example` 并配置需要的能力：
