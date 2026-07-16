@@ -17,6 +17,8 @@ https://startup-traffic-light.cjmai.top/api/mcp
 
 协议：Streamable HTTP，使用 `POST` 请求。服务采用无会话模式并启用 JSON 响应，适合自动化评测和 Serverless 部署。
 
+为兼容不同比赛评测器，HTTP入口会自动补齐MCP要求的 `Accept: application/json, text/event-stream` 和JSON媒体类型，并兼容 `2025-06-18`、`2025-03-26`、`2024-11-05` 协议版本。不规范JSON请求会返回明确的400错误，真实服务故障才返回500。
+
 ## 本地 stdio 启动
 
 ```bash

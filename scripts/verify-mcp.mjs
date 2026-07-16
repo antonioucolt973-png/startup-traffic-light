@@ -90,9 +90,52 @@ async function verifyHttp() {
   try {
     await client.connect(transport);
     await verifyClient(client, "http");
-  } finally {
     await client.close();
+    await verifyCompatibility(`http://127.0.0.1:${address.port}/api/mcp`);
+  } finally {
+    await client.close().catch(() => undefined);
     await new Promise((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+async function verifyCompatibility(url) {
+  const cases = [
+    { name: "json-only", headers: { "Content-Type": "application/json", Accept: "application/json" }, version: "2025-03-26" },
+    { name: "missing-accept", headers: { "Content-Type": "application/json" }, version: "2025-03-26" },
+    { name: "text-plain", headers: { "Content-Type": "text/plain" }, version: "2024-11-05" },
+  ];
+  for (const testCase of cases) {
+    const response = await globalThis.fetch(url, {
+      method: "POST",
+      headers: testCase.headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: testCase.name,
+        method: "initialize",
+        params: {
+          protocolVersion: testCase.version,
+          capabilities: {},
+          clientInfo: { name: testCase.name, version: "1.0.0" },
+        },
+      }),
+    });
+    const payload = await response.json();
+    if (response.status !== 200 || payload.result?.protocolVersion !== testCase.version) {
+      throw new Error(`兼容测试失败：${testCase.name}，HTTP ${response.status}`);
+    }
+  }
+
+  const invalid = await globalThis.fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{invalid-json",
+  });
+  if (invalid.status !== 400) throw new Error(`无效 JSON 应返回 400，实际为 ${invalid.status}`);
+
+  const getResponse = await globalThis.fetch(url);
+  const getPayload = await getResponse.json();
+  if (getResponse.status !== 405 || getPayload.error?.data?.transport !== "streamable-http") {
+    throw new Error("GET 请求没有返回清晰的 MCP 使用说明");
   }
 }
 
