@@ -8,12 +8,14 @@ import { NextRoute } from "./components/NextRoute";
 import { ProjectDeparture } from "./components/ProjectDeparture";
 import { RouteOverview, type InitialValidationRoute } from "./components/RouteOverview";
 import { AccountMenu } from "./components/AccountMenu";
+import { ProjectManager } from "./components/ProjectManager";
 import { ProjectVehicle } from "./components/ProjectVehicle";
 import { exampleCases } from "./data/examples";
 import {
   buildReport,
   deriveEvidenceSummary,
   emptyGatePlans,
+  emptyProject,
   normalizeGatePlans,
   normalizeProject,
   plansToRoadtestPlan,
@@ -21,9 +23,10 @@ import {
 import { ensureActiveCycle, transitionJourneyCycle } from "./lib/cycleEngine";
 import {
   createEmptyWorkspace,
+  createProjectLibraryEntry,
   evidenceSummaryToRecords,
-  loadWorkspace,
-  saveWorkspace,
+  loadProjectLibrary,
+  saveProjectLibrary,
 } from "./lib/storage";
 import {
   getCloudSession,
@@ -37,6 +40,7 @@ import {
 import type {
   CycleOutcome,
   Project,
+  ProjectLibrary,
   ProjectWorkspace,
 } from "./types";
 
@@ -52,11 +56,16 @@ const views: Array<{ id: ViewId; label: string; icon: React.ComponentType<{ size
 ];
 
 export default function App() {
-  const [workspace, setWorkspaceState] = useState<ProjectWorkspace>(() => loadWorkspace());
+  const [projectLibrary, setProjectLibraryState] = useState<ProjectLibrary>(() => loadProjectLibrary());
   const [activeView, setActiveView] = useState<ViewId>("departure");
   const [focusedTaskId, setFocusedTaskId] = useState<string>();
+  const [showProjectManager, setShowProjectManager] = useState(false);
   const [cloudSession, setCloudSession] = useState<CloudSession>({ user: null, enabled: false });
   const [syncState, setSyncState] = useState("本地游客数据");
+  const workspace = useMemo(
+    () => projectLibrary.projects.find((entry) => entry.id === projectLibrary.activeProjectId)?.workspace ?? projectLibrary.projects[0].workspace,
+    [projectLibrary],
+  );
   const initialWorkspaceRef = useRef(workspace);
 
   const evidence = useMemo(() => deriveEvidenceSummary(workspace.evidenceRecords), [workspace.evidenceRecords]);
@@ -113,16 +122,53 @@ export default function App() {
 
   function replaceWorkspace(next: ProjectWorkspace) {
     const normalized = ensureWorkspaceVersion(next);
-    setWorkspaceState(normalized);
-    saveWorkspace(normalized);
+    setProjectLibraryState((current) => storeActiveWorkspace(current, normalized));
   }
 
   function updateWorkspace(updater: (current: ProjectWorkspace) => ProjectWorkspace) {
-    setWorkspaceState((current) => {
-      const next = ensureWorkspaceVersion(updater(current));
-      saveWorkspace(next);
+    setProjectLibraryState((current) => {
+      const active = getActiveWorkspace(current);
+      return storeActiveWorkspace(current, ensureWorkspaceVersion(updater(active)));
+    });
+  }
+
+  function selectProject(projectId: string) {
+    setProjectLibraryState((current) => {
+      if (!current.projects.some((entry) => entry.id === projectId)) return current;
+      const next = { ...current, activeProjectId: projectId };
+      saveProjectLibrary(next);
       return next;
     });
+    setFocusedTaskId(undefined);
+    setActiveView("departure");
+    setShowProjectManager(false);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }
+
+  function createNewProject(kind: "demo" | "blank") {
+    const id = crypto.randomUUID();
+    const project: Project = kind === "demo"
+      ? {
+        ...emptyProject,
+        id,
+        name: "AI 试衣助手",
+        description: "我想做一个 AI 一键试衣助手。用户上传自己的照片和衣服图，生成接近真实的试穿效果，帮助经常网购服装、担心上身效果的年轻女性在下单前判断衣服是否适合自己。目前已有一个可点击的换衣 Demo 和 5 位愿意试用的朋友。",
+      }
+      : { ...emptyProject, id };
+    const entry = createProjectLibraryEntry(createEmptyWorkspace(project));
+    setProjectLibraryState((current) => {
+      const next: ProjectLibrary = {
+        schemaVersion: 1,
+        activeProjectId: entry.id,
+        projects: [entry, ...current.projects.filter((item) => item.id !== entry.id)].slice(0, 24),
+      };
+      saveProjectLibrary(next);
+      return next;
+    });
+    setFocusedTaskId(undefined);
+    setActiveView("departure");
+    setShowProjectManager(false);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
   }
 
   function confirmProject(project: Project, initialProject: Project, initialRoute?: InitialValidationRoute) {
@@ -255,7 +301,7 @@ export default function App() {
         </button>
         <nav className="topWorkspaceNav" aria-label="全局导航">
           <button className="active" type="button" onClick={() => navigate("departure")}><LayoutGrid size={15} />工作台</button>
-          <button type="button" title="项目列表将在账号系统上线后开放"><Flag size={15} />我的项目</button>
+          <button className={showProjectManager ? "active" : ""} type="button" onClick={() => setShowProjectManager(true)}><Flag size={15} />我的项目</button>
         </nav>
         <div className="headerUtilities">
           <AccountMenu
@@ -267,6 +313,17 @@ export default function App() {
           <button className="proEntry" type="button" title="Pro 能力将在后续版本开放"><Sparkles size={15} /><span>Pro</span><small>即将开放</small></button>
         </div>
       </header>
+
+      {showProjectManager ? (
+        <ProjectManager
+          projects={projectLibrary.projects}
+          activeProjectId={projectLibrary.activeProjectId}
+          onClose={() => setShowProjectManager(false)}
+          onSelect={selectProject}
+          onCreateDemo={() => createNewProject("demo")}
+          onCreateBlank={() => createNewProject("blank")}
+        />
+      ) : null}
 
       <div className="journeyAppShell">
         <aside className="journeySidebar" aria-label="创业旅程导航">
@@ -305,6 +362,7 @@ export default function App() {
           <section className="journeyMain">
           {activeView === "departure" && (
             <ProjectDeparture
+              key={workspace.project.id}
               project={workspace.project}
               onConfirm={confirmProject}
               onLoadExample={loadExample}
@@ -388,6 +446,22 @@ function buildWorkspaceReport(workspace: ProjectWorkspace) {
 
 function ensureWorkspaceVersion(workspace: ProjectWorkspace): ProjectWorkspace {
   return { ...workspace, schemaVersion: 5 };
+}
+
+function getActiveWorkspace(library: ProjectLibrary): ProjectWorkspace {
+  return library.projects.find((entry) => entry.id === library.activeProjectId)?.workspace ?? library.projects[0].workspace;
+}
+
+function storeActiveWorkspace(library: ProjectLibrary, workspace: ProjectWorkspace): ProjectLibrary {
+  const previousId = library.activeProjectId;
+  const entry = createProjectLibraryEntry(workspace);
+  const next: ProjectLibrary = {
+    schemaVersion: 1,
+    activeProjectId: entry.id,
+    projects: [entry, ...library.projects.filter((item) => item.id !== previousId && item.id !== entry.id)].slice(0, 24),
+  };
+  saveProjectLibrary(next);
+  return next;
 }
 
 function projectInputsChanged(previous: Project, current: Project) {

@@ -292,6 +292,18 @@ export interface ProjectWorkspace {
   surveys: SurveyCampaign[];
 }
 
+export interface ProjectLibraryEntry {
+  id: string;
+  updatedAt: string;
+  workspace: ProjectWorkspace;
+}
+
+export interface ProjectLibrary {
+  schemaVersion: 1;
+  activeProjectId: string;
+  projects: ProjectLibraryEntry[];
+}
+
 export interface DecisionReport {
   light: Light;
   lightLabel: string;

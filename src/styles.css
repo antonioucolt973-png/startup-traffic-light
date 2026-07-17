@@ -2765,6 +2765,39 @@ body { color: var(--ink) !important; }
 .topWorkspaceNav { display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid #d9e4df; border-radius: 8px; background: #f8faf8; }
 .topWorkspaceNav button { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 6px; background: transparent; color: #587069; font-size: 12px; font-weight: 800; }
 .topWorkspaceNav button.active { background: #e8f7ef; color: #17784b; }
+.projectManagerBackdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 24px; background: rgba(28, 43, 38, .38); backdrop-filter: blur(5px); }
+.projectManagerDialog { width: min(780px, 100%); max-height: min(760px, calc(100vh - 48px)); display: grid; gap: 18px; overflow: hidden; padding: 22px; border: 1px solid #d7e1db; border-radius: 14px; background: #fff; box-shadow: 0 26px 80px rgba(25, 46, 36, .24); }
+.projectManagerHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 15px; border-bottom: 1px solid #e8eeea; }
+.projectManagerHeader > div { display: grid; gap: 4px; }
+.projectManagerHeader span { display: flex; align-items: center; gap: 6px; color: #238456; font-size: 11px; font-weight: 900; }
+.projectManagerHeader h2 { margin: 0; color: var(--ink); font-size: 24px; }
+.projectManagerHeader p { margin: 0; color: #75867f; font-size: 12px; }
+.projectManagerHeader > button { width: 34px; height: 34px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #dce5e0; border-radius: 8px; background: #fff; color: #5d7168; }
+.projectCreationOptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.projectCreationOptions > button { min-height: 112px; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 16px; border: 1px solid #d9e4de; border-radius: 10px; background: #fbfdfc; color: var(--ink); text-align: left; }
+.projectCreationOptions > button:hover { border-color: #8bc9aa; box-shadow: 0 8px 22px rgba(37, 112, 75, .09); }
+.projectCreationOptions > button.demoProjectOption { border-color: #f0b56b; background: #fff9ef; }
+.projectCreationOptions > button > i { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; background: #edf7f1; color: #218153; font-style: normal; }
+.projectCreationOptions > button.demoProjectOption > i { background: #fff0d8; color: #e8841d; }
+.projectCreationOptions > button > span { min-width: 0; display: grid; gap: 3px; }
+.projectCreationOptions small { color: #7c9187; font-size: 10px; font-weight: 900; }
+.projectCreationOptions .demoProjectOption small { color: #c77620; }
+.projectCreationOptions strong { color: var(--ink); font-size: 14px; }
+.projectCreationOptions em { overflow: hidden; color: #6f8179; font-size: 11px; font-style: normal; line-height: 1.45; }
+.projectCreationOptions > button > svg { color: #809188; }
+.projectListHeading { display: flex; align-items: center; justify-content: space-between; }
+.projectListHeading strong { color: #334c42; font-size: 13px; }
+.projectListHeading span { color: #89978f; font-size: 11px; }
+.projectManagerList { min-height: 0; display: grid; gap: 8px; overflow-y: auto; padding-right: 3px; }
+.projectManagerList > button { width: 100%; min-height: 86px; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid #e0e8e3; border-radius: 9px; background: #fff; color: var(--ink); text-align: left; }
+.projectManagerList > button:hover { background: #f9fcfa; border-color: #b9d6c6; }
+.projectManagerList > button.active { border-color: #7cc69d; background: #f1faf5; box-shadow: inset 3px 0 0 #26a866; }
+.projectListIcon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 9px; background: #edf5f0; color: #2b8558; }
+.projectListMain { min-width: 0; display: grid; gap: 3px; }
+.projectListMain strong { color: #243b32; font-size: 14px; }
+.projectListMain em { overflow: hidden; color: #708079; font-size: 11px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.projectListMain small { color: #91a098; font-size: 10px; }
+.projectListAction { display: inline-flex; align-items: center; gap: 5px; color: #418260; font-size: 10px; font-weight: 900; white-space: nowrap; }
 .headerUtilities { justify-content: flex-end !important; gap: 7px !important; }
 .headerProject, .headerProjects { display: none !important; }
 .accountTrigger, .proEntry { min-height: 36px !important; display: inline-flex; align-items: center; gap: 6px; padding: 0 11px !important; border: 1px solid #d5e0da !important; border-radius: 7px !important; background: #fff !important; color: #38534a !important; font-size: 12px !important; font-weight: 800; }
@@ -3480,6 +3513,10 @@ body { color: var(--ink) !important; }
   .journeyNav button > span, .journeyNav button svg { display: none; }
   .sidebarVehicle, .sidebarEnergy, .sidebarProgress, .sidebarFutureLinks { display: none; }
   .ideaLaunch { grid-template-columns: 1fr; min-height: auto !important; padding: 26px 20px !important; }
+  .projectManagerBackdrop { align-items: end; padding: 10px; }
+  .projectManagerDialog { max-height: calc(100vh - 20px); padding: 16px; border-radius: 13px; }
+  .projectCreationOptions { grid-template-columns: 1fr; }
+  .projectCreationOptions > button { min-height: 92px; }
 }
 @media (max-width: 480px) {
   .journeyBrand small, .proEntry, .accountTrigger span { display: none; }
@@ -3488,5 +3525,7 @@ body { color: var(--ink) !important; }
   .journeyNav button { min-height: 42px !important; }
   .ideaLaunchCopy h1 { font-size: 34px !important; }
   .ideaConsole { padding: 17px !important; box-shadow: 5px 6px 0 #e7efe9 !important; }
+  .projectManagerList > button { grid-template-columns: 34px minmax(0, 1fr); }
+  .projectListAction { grid-column: 2; justify-self: start; }
 }
 

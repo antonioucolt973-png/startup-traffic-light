@@ -15,6 +15,8 @@ import type {
   GatePlans,
   JourneyCycle,
   Project,
+  ProjectLibrary,
+  ProjectLibraryEntry,
   ProjectWorkspace,
   RedTeamTurn,
   RoadtestStatus,
@@ -27,6 +29,7 @@ const EVIDENCE_KEY = "startup-traffic-light:evidence";
 const ROADTEST_PLAN_KEY = "startup-traffic-light:roadtest-plan";
 const CALIBRATION_HISTORY_KEY = "startup-traffic-light:calibration-history";
 const WORKSPACE_KEY = "startup-traffic-light:workspace:v5";
+const PROJECT_LIBRARY_KEY = "startup-traffic-light:projects:v1";
 const PREVIOUS_WORKSPACE_KEYS = ["startup-traffic-light:workspace:v4", "startup-traffic-light:workspace:v3", "startup-traffic-light:workspace:v2"];
 
 export function createEmptyWorkspace(project: Project = emptyProject): ProjectWorkspace {
@@ -65,6 +68,35 @@ export function loadWorkspace(): ProjectWorkspace {
 
 export function saveWorkspace(workspace: ProjectWorkspace) {
   localStorage.setItem(WORKSPACE_KEY, JSON.stringify(normalizeWorkspace(workspace)));
+}
+
+export function loadProjectLibrary(): ProjectLibrary {
+  const saved = readJson<unknown>(PROJECT_LIBRARY_KEY);
+  if (saved && typeof saved === "object") {
+    const normalized = normalizeProjectLibrary(saved as Partial<ProjectLibrary>);
+    if (normalized.projects.length > 0) return normalized;
+  }
+
+  const workspace = loadWorkspace();
+  const library: ProjectLibrary = {
+    schemaVersion: 1,
+    activeProjectId: workspace.project.id,
+    projects: [{ id: workspace.project.id, updatedAt: new Date().toISOString(), workspace }],
+  };
+  saveProjectLibrary(library);
+  return library;
+}
+
+export function saveProjectLibrary(library: ProjectLibrary) {
+  const normalized = normalizeProjectLibrary(library);
+  localStorage.setItem(PROJECT_LIBRARY_KEY, JSON.stringify(normalized));
+  const active = normalized.projects.find((entry) => entry.id === normalized.activeProjectId) ?? normalized.projects[0];
+  if (active) saveWorkspace(active.workspace);
+}
+
+export function createProjectLibraryEntry(workspace: ProjectWorkspace, updatedAt = new Date().toISOString()): ProjectLibraryEntry {
+  const normalized = normalizeWorkspace(workspace);
+  return { id: normalized.project.id, updatedAt, workspace: normalized };
 }
 
 export function loadProject(): Project | null {
@@ -152,6 +184,30 @@ function normalizeWorkspace(workspace: Partial<ProjectWorkspace>): ProjectWorksp
       : [],
     surveys: Array.isArray(workspace.surveys) ? workspace.surveys.filter((survey) => survey && typeof survey.id === "string") : [],
   };
+}
+
+function normalizeProjectLibrary(library: Partial<ProjectLibrary>): ProjectLibrary {
+  const seen = new Set<string>();
+  const projects = Array.isArray(library.projects)
+    ? library.projects.flatMap((candidate) => {
+      if (!candidate || typeof candidate !== "object") return [];
+      const entry = candidate as Partial<ProjectLibraryEntry>;
+      if (!entry.workspace || typeof entry.workspace !== "object") return [];
+      const workspace = normalizeWorkspace(entry.workspace);
+      const id = workspace.project.id;
+      if (!id || seen.has(id)) return [];
+      seen.add(id);
+      return [{
+        id,
+        updatedAt: typeof entry.updatedAt === "string" ? entry.updatedAt : new Date().toISOString(),
+        workspace,
+      }];
+    }).slice(0, 24)
+    : [];
+  const activeProjectId = typeof library.activeProjectId === "string" && projects.some((entry) => entry.id === library.activeProjectId)
+    ? library.activeProjectId
+    : projects[0]?.id ?? "";
+  return { schemaVersion: 1, activeProjectId, projects };
 }
 
 function legacyPlanToGatePlans(plan: RoadtestPlan): GatePlans {
