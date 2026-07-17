@@ -14,25 +14,37 @@ import {
   RotateCcw,
   ShieldCheck,
   ShieldX,
+  Sparkles,
   UsersRound,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { isCompetitionPresetIdea } from "../data/competitionPreset";
+import { requestAiCoach } from "../lib/aiClient";
+import { buildFallbackCoachResponse } from "../lib/aiFallback";
+import type { AiCoachData, AiCoachRequest } from "../lib/aiSchemas";
 import { evidenceTypeLabels } from "../lib/labels";
-import type { EvidenceRecord, ValidationTask } from "../types";
+import type { EvidenceRecord, Project, ValidationTask } from "../types";
 
 interface EvidenceBackpackProps {
+  project: Project;
   records: EvidenceRecord[];
   tasks: ValidationTask[];
   onUpdate: (record: EvidenceRecord) => void;
+  onConfirm: (record: EvidenceRecord) => void;
   onExclude: (record: EvidenceRecord) => void;
   onOpenTask: (taskId?: string) => void;
 }
 
-export function EvidenceBackpack({ records, tasks, onUpdate, onExclude, onOpenTask }: EvidenceBackpackProps) {
+type EvidenceReview = NonNullable<AiCoachData["evidenceReview"]>;
+
+export function EvidenceBackpack({ project, records, tasks, onUpdate, onConfirm, onExclude, onOpenTask }: EvidenceBackpackProps) {
   const [expandedId, setExpandedId] = useState<string | null>(records[0]?.id ?? null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBehavior, setEditingBehavior] = useState("");
   const [editingNote, setEditingNote] = useState("");
+  const [evaluations, setEvaluations] = useState<Record<string, EvidenceReview>>({});
+  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
+  const [evaluationMessages, setEvaluationMessages] = useState<Record<string, string>>({});
   const taskMap = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const grouped = useMemo(() => groupEvidence(records, tasks), [records, tasks]);
   const stats = useMemo(() => ({
@@ -51,7 +63,47 @@ export function EvidenceBackpack({ records, tasks, onUpdate, onExclude, onOpenTa
   function saveEdit(record: EvidenceRecord) {
     if (!editingBehavior.trim()) return;
     onUpdate({ ...record, behavior: editingBehavior.trim(), note: editingNote.trim() });
+    setEvaluations((current) => {
+      const next = { ...current };
+      delete next[record.id];
+      return next;
+    });
+    setEvaluationMessages((current) => {
+      const next = { ...current };
+      delete next[record.id];
+      return next;
+    });
     setEditingId(null);
+  }
+
+  async function evaluateRecord(record: EvidenceRecord) {
+    if (evaluatingId) return;
+    setEvaluatingId(record.id);
+    const task = record.taskId ? taskMap.get(record.taskId) : undefined;
+    const request = buildEvidenceRequest(project, record, task);
+    const immediate = buildFallbackCoachResponse(request, "已先显示本地证据预检，MiMo 正在后台核对结构化摘要。");
+    if (immediate.data.evidenceReview) setEvaluations((current) => ({ ...current, [record.id]: immediate.data.evidenceReview! }));
+    setEvaluationMessages((current) => ({ ...current, [record.id]: immediate.notice ?? "" }));
+    const response = await requestAiCoach(request, {
+      strategy: isCompetitionPresetIdea(project, project.description) ? "preset-only" : "live-first",
+      cacheKey: `evidence:${project.id}:${record.id}:${record.behavior}:${record.quantity}:${record.userQuote ?? ""}:${record.attachmentName ?? ""}`,
+    });
+    if (response.data.evidenceReview) setEvaluations((current) => ({ ...current, [record.id]: response.data.evidenceReview! }));
+    setEvaluationMessages((current) => ({ ...current, [record.id]: response.notice || (response.source === "ai" ? "MiMo 已更新证据质量建议。" : "当前使用本地证据预检。") }));
+    setEvaluatingId(null);
+  }
+
+  function confirmStructuredEvidence(record: EvidenceRecord) {
+    const evaluation = evaluations[record.id];
+    if (!evaluation || !record.verifiable) return;
+    onConfirm({
+      ...record,
+      behavior: evaluation.extracted.behavior,
+      quantity: evaluation.extracted.quantity,
+      userQuote: evaluation.extracted.userQuote,
+      reviewStatus: "confirmed",
+      assessment: `${qualityLabel(evaluation.quality)}：${evaluation.explanation} 用户已核对并确认该结构化证据。`,
+    });
   }
 
   return (
@@ -68,7 +120,7 @@ export function EvidenceBackpack({ records, tasks, onUpdate, onExclude, onOpenTa
         <article className="rejected"><ShieldX size={18} /><div><span>已排除</span><strong>{stats.rejected}</strong></div></article>
       </section>
 
-      <aside className="backpackRule"><ShieldCheck size={17} /><p><strong>证据规则</strong>只有任务执行后提交的用户行为记录，经过审核确认后才会计入证据充分度。不能在背包里手动把证据改成“已确认”。</p></aside>
+      <aside className="backpackRule"><ShieldCheck size={17} /><p><strong>证据规则</strong>AI只提取行为、数量、原话和材料类型并给出建议；只有通过本地规则预检、再由用户核对确认的记录，才会计入证据充分度并影响后续灯号。</p></aside>
 
       {records.length === 0 ? (
         <section className="taskBackpackEmpty"><Backpack size={38} /><h2>背包还是空的</h2><p>先完成访谈、试用、报价或付费验证任务，再提交截图、文件、数据或录音。</p><button className="primaryButton" type="button" onClick={() => onOpenTask()}>前往任务执行<ArrowRight size={16} /></button></section>
@@ -100,10 +152,13 @@ export function EvidenceBackpack({ records, tasks, onUpdate, onExclude, onOpenTa
                           <section className="evidenceRealityStory"><span>实际发生的行为</span><p>{record.behavior}</p></section>
                           {record.userQuote ? <section className="evidenceUserQuote"><MessageSquareQuote size={18} /><div><span>用户原话</span><blockquote>{record.userQuote}</blockquote></div></section> : null}
                           {record.note ? <section className="evidenceDataNote"><FileText size={17} /><div><span>数据或补充记录</span><p>{record.note}</p></div></section> : null}
-                          <section className="evidenceAssessment"><span>AI证据质量评估 · 比赛预设规则</span><p>{record.assessment || (record.reviewStatus === "confirmed" ? "该记录包含真实行为和数量，已作为现实证据确认。" : "该记录仍缺少足够的行为、数量或可复核材料。")}</p></section>
+                          <section className="evidenceAssessment"><span>AI证据质量评估 · 仅供用户审核</span><p>{record.assessment || (record.reviewStatus === "confirmed" ? "该记录已经用户确认并进入规则引擎。" : "该记录尚未经过结构化提取与用户确认。")}</p></section>
+                          {evaluations[record.id] ? <EvidenceReviewCard review={evaluations[record.id]} message={evaluationMessages[record.id]} /> : null}
                         </>}
                         <footer className="backpackRecordActions">
                           <button type="button" onClick={() => startEdit(record)}><PencilLine size={14} />修改说明</button>
+                          {record.reviewStatus === "pending" ? <button type="button" disabled={evaluatingId === record.id} onClick={() => void evaluateRecord(record)}><Sparkles size={14} />{evaluatingId === record.id ? "MiMo后台核对中…" : "AI整理并评估"}</button> : null}
+                          {record.reviewStatus === "pending" && evaluations[record.id] && record.verifiable ? <button type="button" onClick={() => confirmStructuredEvidence(record)}><ShieldCheck size={14} />确认结构化证据</button> : null}
                           {record.reviewStatus === "pending" ? <button type="button" onClick={() => onOpenTask(record.taskId)}><RotateCcw size={14} />补充证据</button> : null}
                           {record.taskId ? <button type="button" onClick={() => onOpenTask(record.taskId)}>返回对应任务<ArrowRight size={14} /></button> : null}
                           {record.reviewStatus !== "rejected" ? <button className="rejectEvidenceButton" type="button" onClick={() => onExclude(record)}><ShieldX size={14} />排除无效证据</button> : null}
@@ -119,6 +174,37 @@ export function EvidenceBackpack({ records, tasks, onUpdate, onExclude, onOpenTa
       )}
     </div>
   );
+}
+
+function EvidenceReviewCard({ review, message }: { review: EvidenceReview; message?: string }) {
+  return <section className={`structuredEvidenceReview quality-${review.quality}`}><header><Sparkles size={16} /><strong>{qualityLabel(review.quality)}</strong><span>{message}</span></header><dl><div><dt>提取行为</dt><dd>{review.extracted.behavior}</dd></div><div><dt>人数/次数</dt><dd>{review.extracted.quantity}</dd></div><div><dt>用户原话</dt><dd>{review.extracted.userQuote || "未提供"}</dd></div><div><dt>材料类型</dt><dd>{review.extracted.materialType}</dd></div></dl>{review.missing.length ? <div><strong>仍缺少</strong><ul>{review.missing.map((item) => <li key={item}>{item}</li>)}</ul></div> : <p>{review.explanation}</p>}{review.supplementation.length ? <aside><strong>补证建议</strong>{review.supplementation.join("；")}</aside> : null}</section>;
+}
+
+function buildEvidenceRequest(project: Project, record: EvidenceRecord, task?: ValidationTask): AiCoachRequest {
+  return {
+    mode: "evidence_review",
+    project: pickAiProject(project),
+    evidence: { interviewCount: 0, activeInterestCount: 0, trialCount: 0, paymentCount: 0, hasRetention: false },
+    stageContext: {
+      record: {
+        behavior: record.behavior,
+        quantity: record.quantity,
+        frequency: `${record.quantity} 人/次`,
+        userQuote: record.userQuote ?? "",
+        materialType: record.attachmentName ? `${record.attachmentType ?? "file"}：${record.attachmentName}` : "未提供可复核材料",
+        verifiable: record.verifiable,
+      },
+      task: task ? { title: task.title, passCriteria: task.passCriteria, stopCriteria: task.stopCriteria } : undefined,
+    },
+  };
+}
+
+function pickAiProject(project: Project): AiCoachRequest["project"] {
+  return { name: project.name, description: project.description, targetUser: project.targetUser, painPoint: project.painPoint, alternative: project.alternative, acquisition: project.acquisition, monetization: project.monetization, currentStage: project.currentStage, existingArtifact: project.existingArtifact, biggestUncertainty: project.biggestUncertainty };
+}
+
+function qualityLabel(quality: EvidenceReview["quality"]) {
+  return { insufficient: "证据不足", reviewable: "可人工确认", strong: "较强证据候选" }[quality];
 }
 
 function groupEvidence(records: EvidenceRecord[], tasks: ValidationTask[]) {

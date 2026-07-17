@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { enhanceMcpOutput } from "./mimo-client.mjs";
 
 const shortText = z.string().trim().min(1).max(1200);
 const optionalText = z.string().trim().max(1200).optional();
@@ -44,7 +45,7 @@ export function registerOpcTools(server) {
       },
       annotations: toolAnnotations,
     },
-    async (input) => toolResult(clarifyAndAnalyze(input)),
+    async (input) => toolResult(await enhanceMcpOutput("opc_clarify_and_analyze", input, clarifyAndAnalyze(input))),
   );
 
   server.registerTool(
@@ -77,7 +78,7 @@ export function registerOpcTools(server) {
       },
       annotations: toolAnnotations,
     },
-    async (input) => toolResult(generateRoutes(input)),
+    async (input) => toolResult(await enhanceMcpOutput("opc_generate_routes", input, generateRoutes(input))),
   );
 
   server.registerTool(
@@ -105,7 +106,7 @@ export function registerOpcTools(server) {
       },
       annotations: toolAnnotations,
     },
-    async (input) => toolResult(intersectionDecision(input)),
+    async (input) => toolResult(await enhanceMcpOutput("opc_intersection_decision", input, intersectionDecision(input))),
   );
 
   server.registerTool(
@@ -137,7 +138,7 @@ export function registerOpcTools(server) {
       },
       annotations: toolAnnotations,
     },
-    async (input) => toolResult(generateTasks(input)),
+    async (input) => toolResult(await enhanceMcpOutput("opc_generate_tasks", input, generateTasks(input))),
   );
 
   server.registerTool(
@@ -170,7 +171,7 @@ export function registerOpcTools(server) {
       },
       annotations: toolAnnotations,
     },
-    async (input) => toolResult(evaluateEvidence(input)),
+    async (input) => toolResult(await enhanceMcpOutput("opc_evaluate_evidence", input, evaluateEvidence(input))),
   );
 }
 

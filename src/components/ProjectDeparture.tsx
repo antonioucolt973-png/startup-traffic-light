@@ -10,18 +10,21 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo, useRef, useState } from "react";
-import { buildFallbackCoachResponse } from "../lib/aiFallback";
-import type { AiCoachRequest, AiProjectDraft } from "../lib/aiSchemas";
+import { useRef, useState } from "react";
+import { isCompetitionPresetIdea } from "../data/competitionPreset";
+import { requestAiCoach } from "../lib/aiClient";
+import type { AiClarification, AiCoachRequest, AiProjectDraft, ClarificationTarget } from "../lib/aiSchemas";
 import { stageLabels } from "../lib/labels";
 import type { JourneyCycle, Project } from "../types";
 
 type DeparturePhase = "input" | "clarify" | "briefing";
 
-interface ClarificationStep {
+type ClarificationStep = AiClarification;
+
+interface ClarificationHistoryItem {
   question: string;
-  hint: string;
-  options: string[];
+  answer: string;
+  answerTarget: ClarificationTarget;
 }
 
 interface ProjectDepartureProps {
@@ -48,63 +51,15 @@ const emptyEvidence = {
   hasRetention: false,
 };
 
-function buildClarificationSteps(idea: string, draft: AiProjectDraft): ClarificationStep[] {
-  const isTryOnDemo = /试衣|试穿|换衣|穿搭|服装|衣服图|上身效果/.test(idea);
-  if (isTryOnDemo) {
-    return [
-      {
-        question: "第一批先验证哪一类人？",
-        hint: "先缩小对象，才能找到真实样本，不要同时面向所有服装消费者。",
-        options: ["经常网购服装、担心上身效果的年轻女性", "有私域顾客的服装店主", "先验证愿意上传照片的穿搭内容用户"],
-      },
-      {
-        question: "用户最愿意为哪个结果采取行动？",
-        hint: "我们验证的是具体行为，不是“觉得功能有趣”。",
-        options: ["下单前确认衣服是否适合自己", "减少买错后退货或换货", "快速获得一张可分享的试穿效果图"],
-      },
-      {
-        question: "你现在能拿来验证的最小资源是什么？",
-        hint: "不需要先完成产品；一个人工流程或静态页面也可以测试行动意愿。",
-        options: ["可点击的换衣 Demo 或效果图", "先人工生成 3-5 张试穿效果", "5 位可直接联系的目标用户"],
-      },
-    ];
+function applyClarificationAnswer(draft: AiProjectDraft, step: ClarificationStep, answer: string, idea: string): AiProjectDraft {
+  if (step.answerTarget === "painPoint" && /试衣|试穿|换衣|穿搭|服装|衣服图|上身效果/.test(idea)) {
+    return {
+      ...draft,
+      painPoint: `${draft.targetUser}希望${answer}，但商品图、买家秀和现有试衣方式无法可靠判断自己的上身效果。`,
+      biggestUncertainty: `${draft.targetUser}是否愿意上传照片，并为“${answer}”完成一次试用、留资或付费动作。`,
+    };
   }
-
-  return [
-    {
-      question: "第一批最容易联系到、最常遇到问题的人具体是谁？",
-      hint: "目标用户越具体，后续访谈和验证成本越低。",
-      options: [draft.targetUser, "你身边可直接联系到的一小类用户", "已有社群或客户中的高频用户"],
-    },
-    {
-      question: "这个问题最近一次发生时，用户付出了什么代价？",
-      hint: "优先确认发生频率、时间或金钱损失，而不是主观喜欢程度。",
-      options: ["浪费了时间，需要反复手工处理", "产生了直接金钱损失或退货成本", "错过机会，结果不确定且焦虑"],
-    },
-    {
-      question: "你本周能拿来验证的最小资源是什么？",
-      hint: "先用现有资源获得外部反馈，再决定是否投入开发。",
-      options: ["5 位可直接联系的目标用户", "一个原型、页面或人工服务流程", "现有社群、内容渠道或行业联系人"],
-    },
-  ];
-}
-
-function applyClarifications(draft: AiProjectDraft, idea: string, answers: string[]): AiProjectDraft {
-  const isTryOnDemo = /试衣|试穿|换衣|穿搭|服装|衣服图|上身效果/.test(idea);
-  const [targetUser, desiredOutcome, availableResource] = answers;
-  const user = targetUser || draft.targetUser;
-
-  return {
-    ...draft,
-    targetUser: user,
-    painPoint: isTryOnDemo && desiredOutcome
-      ? `${user}希望${desiredOutcome}，但商品图、买家秀和现有试衣方式无法可靠判断自己的上身效果。`
-      : draft.painPoint,
-    existingArtifact: availableResource || draft.existingArtifact,
-    biggestUncertainty: isTryOnDemo
-      ? `${user}是否愿意上传照片，并为“${desiredOutcome || "确认上身效果"}”完成一次试用、留资或付费动作。`
-      : `${user}是否真的会为解决这个问题采取可复核的下一步行动。`,
-  };
+  return { ...draft, [step.answerTarget]: answer };
 }
 
 export function ProjectDeparture({
@@ -121,17 +76,21 @@ export function ProjectDeparture({
   const destination = destinations[0];
   const [draft, setDraft] = useState<AiProjectDraft | null>(null);
   const [clarificationRound, setClarificationRound] = useState(0);
-  const [clarificationAnswers, setClarificationAnswers] = useState<string[]>([]);
+  const [clarificationStep, setClarificationStep] = useState<ClarificationStep | null>(null);
+  const [clarificationHistory, setClarificationHistory] = useState<ClarificationHistoryItem[]>([]);
   const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [source, setSource] = useState<"ai" | "fallback">("fallback");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showGuidedInput, setShowGuidedInput] = useState(false);
   const [guidedIdea, setGuidedIdea] = useState({ user: "", problem: "", method: "", outcome: "", resources: "" });
-  const clarificationSteps = useMemo(
-    () => draft ? buildClarificationSteps(idea, draft) : [],
-    [draft, idea],
-  );
+
+  function requestIntake(request: AiCoachRequest, currentIdea: string) {
+    return requestAiCoach(request, {
+      strategy: isCompetitionPresetIdea(project, currentIdea) ? "preset-only" : "live-first",
+    });
+  }
+
   async function analyzeIdea(extraContext = "", suppliedIdea = idea) {
     const normalizedIdea = suppliedIdea.trim();
     if (normalizedIdea.length < 8) {
@@ -140,40 +99,48 @@ export function ProjectDeparture({
     }
     setError("");
     setLoading(true);
-    const request = buildIntakeRequest(`${normalizedIdea}\n本轮希望：${destination}${extraContext}`);
-    const response = buildFallbackCoachResponse(request, "比赛演示预设分析：未连接外部大模型，结果由本地规则稳定生成。");
+    const request = buildIntakeRequest(`${normalizedIdea}\n本轮希望：${destination}${extraContext}`, 1, []);
+    const response = await requestIntake(request, normalizedIdea);
     const nextDraft = response.data.projectDraft;
-    if (!nextDraft) {
+    const nextStep = response.data.clarification;
+    if (!nextDraft || !nextStep) {
       setError("项目拆解没有返回完整结构，请稍后重试。");
       setLoading(false);
       return;
     }
     setDraft(nextDraft);
     setClarificationRound(0);
-    setClarificationAnswers([]);
+    setClarificationStep(nextStep);
+    setClarificationHistory([]);
     setClarificationAnswer("");
-    setSource("fallback");
+    setSource(response.source);
     setPhase("clarify");
     setLoading(false);
   }
 
-  function buildIntakeRequest(fullIdea: string): AiCoachRequest {
+  function buildIntakeRequest(
+    fullIdea: string,
+    round: number,
+    history: ClarificationHistoryItem[],
+    currentDraft?: AiProjectDraft,
+  ): AiCoachRequest {
     return {
       mode: "project_intake",
       idea: fullIdea,
       project: {
-        name: project.name,
-        description: project.description,
-        targetUser: project.targetUser,
-        painPoint: project.painPoint,
-        alternative: project.alternative,
-        acquisition: project.acquisition,
-        monetization: project.monetization,
-        currentStage: project.currentStage,
-        existingArtifact: project.existingArtifact,
-        biggestUncertainty: project.biggestUncertainty,
+        name: currentDraft?.name ?? project.name,
+        description: currentDraft?.description ?? project.description,
+        targetUser: currentDraft?.targetUser ?? project.targetUser,
+        painPoint: currentDraft?.painPoint ?? project.painPoint,
+        alternative: currentDraft?.alternative ?? project.alternative,
+        acquisition: currentDraft?.acquisition ?? project.acquisition,
+        monetization: currentDraft?.monetization ?? project.monetization,
+        currentStage: currentDraft?.currentStage ?? project.currentStage,
+        existingArtifact: currentDraft?.existingArtifact ?? project.existingArtifact,
+        biggestUncertainty: currentDraft?.biggestUncertainty ?? project.biggestUncertainty,
       },
       evidence: emptyEvidence,
+      intakeContext: { round, history },
     };
   }
 
@@ -184,25 +151,29 @@ export function ProjectDeparture({
     window.requestAnimationFrame(() => ideaInputRef.current?.focus());
   }
 
-  function submitClarification() {
+  async function submitClarification() {
     const answer = clarificationAnswer.trim();
-    if (!answer) {
+    if (!answer || !draft || !clarificationStep) {
       setError("请选择一个快捷答案，或补充你自己的答案后再继续。");
       return;
     }
 
-    const answers = [...clarificationAnswers, answer];
+    const answeredDraft = applyClarificationAnswer(draft, clarificationStep, answer, idea);
+    const history = [...clarificationHistory, {
+      question: clarificationStep.question,
+      answer,
+      answerTarget: clarificationStep.answerTarget,
+    }];
     setError("");
-    if (clarificationRound === clarificationSteps.length - 1 && draft) {
-      const clarifiedDraft = applyClarifications(draft, idea, answers);
-      setClarificationAnswers(answers);
-      setDraft(clarifiedDraft);
+    if (clarificationRound === 2) {
+      setClarificationHistory(history);
+      setDraft(answeredDraft);
       setClarificationAnswer("");
       const nextProject: Project = {
         ...project,
-        ...clarifiedDraft,
+        ...answeredDraft,
         id: project.description.trim() === idea.trim() && project.id ? project.id : crypto.randomUUID(),
-        hasDemo: clarifiedDraft.currentStage === "demo" || clarifiedDraft.currentStage === "mvp" || clarifiedDraft.currentStage === "growth",
+        hasDemo: answeredDraft.currentStage === "demo" || answeredDraft.currentStage === "mvp" || answeredDraft.currentStage === "growth",
       };
       const initialProject: Project = {
         ...project,
@@ -222,9 +193,28 @@ export function ProjectDeparture({
       return;
     }
 
-    setClarificationAnswers(answers);
+    setLoading(true);
+    const nextRound = clarificationRound + 2;
+    const response = await requestIntake(buildIntakeRequest(
+      `${idea.trim()}\n本轮希望：${destination}`,
+      nextRound,
+      history,
+      answeredDraft,
+    ), idea);
+    const nextDraft = response.data.projectDraft;
+    const nextStep = response.data.clarification;
+    if (!nextDraft || !nextStep) {
+      setError("下一轮理清没有返回完整结构，请重试当前回答。");
+      setLoading(false);
+      return;
+    }
+    setClarificationHistory(history);
+    setDraft(nextDraft);
+    setClarificationStep(nextStep);
+    setSource(response.source);
     setClarificationAnswer("");
     setClarificationRound((current) => current + 1);
+    setLoading(false);
   }
 
   return (
@@ -313,7 +303,7 @@ export function ProjectDeparture({
           </motion.section>
         )}
 
-        {phase === "clarify" && draft && clarificationSteps[clarificationRound] && (
+        {phase === "clarify" && draft && clarificationStep && (
           <motion.section key="clarify" className="clarificationJourney" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
             <header className="clarificationJourneyHeader">
               <div>
@@ -321,12 +311,12 @@ export function ProjectDeparture({
                 <h1>每次只确认一个会影响验证路线的问题。</h1>
                 <p>这不是普通聊天。你的回答会决定项目优先服务谁、验证什么，以及先用什么资源获得外部反馈。</p>
               </div>
-              <div className={`aiSourceMark source-${source}`}><Sparkles size={16} />比赛预设分析流程</div>
+              <div className={`aiSourceMark source-${source}`}><Sparkles size={16} />{source === "ai" ? "MiMo 实时理清" : "比赛预设分析流程"}</div>
             </header>
 
             <ol className="clarificationProgress" aria-label="AI 理清进度">
-              {clarificationSteps.map((step, index) => (
-                <li key={step.question} className={index === clarificationRound ? "active" : index < clarificationRound ? "done" : ""}>
+              {[0, 1, 2].map((index) => (
+                <li key={index} className={index === clarificationRound ? "active" : index < clarificationRound ? "done" : ""}>
                   <span>{index < clarificationRound ? <Check size={15} /> : index + 1}</span><b>关键问题 {index + 1}</b>
                 </li>
               ))}
@@ -334,10 +324,10 @@ export function ProjectDeparture({
 
             <article className="clarificationQuestionCard">
               <span>AI 追问</span>
-              <h2>{clarificationSteps[clarificationRound].question}</h2>
-              <p>{clarificationSteps[clarificationRound].hint}</p>
+              <h2>{clarificationStep.question}</h2>
+              <p>{clarificationStep.hint}</p>
               <div className="clarificationChoices" aria-label="快捷答案">
-                {clarificationSteps[clarificationRound].options.map((option) => (
+                {clarificationStep.options.map((option) => (
                   <button key={option} type="button" className={clarificationAnswer === option ? "selected" : ""} onClick={() => setClarificationAnswer(option)}>{option}</button>
                 ))}
               </div>
@@ -347,8 +337,10 @@ export function ProjectDeparture({
               </label>
               {error && <p className="ideaError">{error}</p>}
               <footer>
-                <small>已记录 {clarificationAnswers.length} 条回答。AI 不会把这里的回答直接当作真实用户证据。</small>
-                <button className="primaryButton" type="button" onClick={submitClarification}>{clarificationRound === 2 ? <><BrainCircuit size={17} />完成理清，进入路线总览</> : <><ArrowRight size={17} />确认并进入下一问</>}</button>
+                <small>已记录 {clarificationHistory.length} 条回答。AI 不会把这里的回答直接当作真实用户证据。</small>
+                <button className="primaryButton" type="button" onClick={() => void submitClarification()} disabled={loading}>
+                  {loading ? <><LoaderCircle className="spin" size={17} />AI 正在生成下一问</> : clarificationRound === 2 ? <><BrainCircuit size={17} />完成理清，进入路线总览</> : <><ArrowRight size={17} />确认并进入下一问</>}
+                </button>
               </footer>
             </article>
           </motion.section>

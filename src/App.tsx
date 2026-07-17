@@ -11,6 +11,7 @@ import { AccountMenu } from "./components/AccountMenu";
 import { ProjectManager } from "./components/ProjectManager";
 import { ProjectVehicle } from "./components/ProjectVehicle";
 import { exampleCases } from "./data/examples";
+import { competitionTryOnIdea } from "./data/competitionPreset";
 import {
   buildReport,
   deriveEvidenceSummary,
@@ -152,7 +153,7 @@ export default function App() {
         ...emptyProject,
         id,
         name: "AI 试衣助手",
-        description: "我想做一个 AI 一键试衣助手。用户上传自己的照片和衣服图，生成接近真实的试穿效果，帮助经常网购服装、担心上身效果的年轻女性在下单前判断衣服是否适合自己。目前已有一个可点击的换衣 Demo 和 5 位愿意试用的朋友。",
+        description: competitionTryOnIdea,
       }
       : { ...emptyProject, id };
     const entry = createProjectLibraryEntry(createEmptyWorkspace(project));
@@ -242,6 +243,22 @@ export default function App() {
       evidenceRecords: current.evidenceRecords.map((item) => item.id === record.id ? { ...item, reviewStatus: "rejected", assessment: "用户将该记录标记为无效证据，已从证据充分度中排除。" } : item),
       tasks: current.tasks.map((task) => task.id === record.taskId && task.workflowStatus === "completed" ? { ...task, status: "pending", workflowStatus: "needs_evidence" } : task),
     }));
+  }
+
+  function confirmEvidenceRecord(record: ProjectWorkspace["evidenceRecords"][number]) {
+    updateWorkspace((current) => {
+      const taskIndex = current.tasks.findIndex((task) => task.id === record.taskId);
+      const tasks = current.tasks.map((task, index) => {
+        if (task.id === record.taskId) return { ...task, status: "completed" as const, workflowStatus: "completed" as const, result: record.behavior };
+        if (taskIndex >= 0 && index === taskIndex + 1 && task.workflowStatus === "locked") return { ...task, workflowStatus: "ready" as const };
+        return task;
+      });
+      return {
+        ...current,
+        tasks,
+        evidenceRecords: current.evidenceRecords.map((item) => item.id === record.id ? record : item),
+      };
+    });
   }
 
   function updateTask(task: ProjectWorkspace["tasks"][number]) {
@@ -373,6 +390,7 @@ export default function App() {
           )}
           {activeView === "map" && (
             <RouteOverview
+              key={workspace.project.id}
               project={workspace.project}
               initialProject={workspace.initialProject}
               onBack={() => navigate("departure")}
@@ -388,9 +406,11 @@ export default function App() {
           )}
           {activeView === "backpack" && (
             <EvidenceBackpack
+              project={workspace.project}
               records={workspace.evidenceRecords}
               tasks={workspace.tasks}
               onUpdate={updateEvidenceRecord}
+              onConfirm={confirmEvidenceRecord}
               onExclude={excludeEvidenceRecord}
               onOpenTask={openTask}
             />

@@ -9,7 +9,11 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
     "verify:p0": "node --experimental-strip-types scripts/verify-p0.ts",
+    "verify:ai-stage1": "node --env-file=.env.local --experimental-strip-types scripts/verify-ai-stage1.ts",
+    "verify:ai-stage23": "node --env-file=.env.local --experimental-strip-types scripts/verify-ai-stage23.ts",
+    "verify:ai-stage47": "node --env-file=.env.local --experimental-strip-types scripts/verify-ai-stage47.ts",
     "verify:mcp": "node scripts/verify-mcp.mjs",
+    "verify:mcp-ai": "node scripts/verify-mcp-ai.mjs",
     "mcp:server": "node mcp/server.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },

@@ -14,6 +14,7 @@ import {
   plansToRoadtestPlan,
 } from "../src/lib/decisionEngine.ts";
 import { buildFallbackCoachResponse } from "../src/lib/aiFallback.ts";
+import { competitionTryOnIdea, isCompetitionPresetIdea } from "../src/data/competitionPreset.ts";
 import { aiCoachRequestSchema, aiCoachResponseSchema } from "../src/lib/aiSchemas.ts";
 import { compareCalibration, createCalibrationRound, createValidationTasks } from "../src/lib/calibration.ts";
 import { ensureActiveCycle, transitionJourneyCycle } from "../src/lib/cycleEngine.ts";
@@ -197,13 +198,81 @@ const aiRequest = aiCoachRequestSchema.parse({
 assert.equal(aiCoachResponseSchema.parse(buildFallbackCoachResponse(aiRequest)).source, "fallback");
 assert.equal(aiCoachResponseSchema.safeParse({ schemaVersion: "1.0", mode: "plan_review", source: "ai", data: {} }).success, false);
 
-async function invokeAiHandler(fetchMock?: typeof fetch) {
+const stageOneIntakeRequest = aiCoachRequestSchema.parse({
+  mode: "project_intake",
+  idea: "我想做一个AI试衣助手，帮助网购买衣服的人判断上身效果。",
+  project: { ...makeProject(), name: "AI试衣助手", description: "AI试衣想法", currentStage: "demo" },
+  evidence: { interviewCount: 0, activeInterestCount: 0, trialCount: 0, paymentCount: 0, hasRetention: false },
+  intakeContext: { round: 1, history: [] },
+});
+assert.equal(isCompetitionPresetIdea({ name: "AI 试衣助手" }, competitionTryOnIdea), true);
+assert.equal(isCompetitionPresetIdea({ name: "AI 试衣助手" }, "用户上传照片和衣服图，生成接近真实的试穿效果。"), true);
+assert.equal(isCompetitionPresetIdea({ name: "另一个试衣项目" }, competitionTryOnIdea), true);
+assert.equal(isCompetitionPresetIdea({ name: "老年用药提醒" }, "帮助独居老人避免漏服药物。"), false);
+const intakeFallbackRound1 = aiCoachResponseSchema.parse(buildFallbackCoachResponse(stageOneIntakeRequest));
+assert.equal(intakeFallbackRound1.data.clarification?.round, 1);
+assert.equal(intakeFallbackRound1.data.clarification?.options.length, 3);
+assert.equal(intakeFallbackRound1.data.clarification?.answerTarget, "targetUser");
+const intakeFallbackRound2 = aiCoachResponseSchema.parse(buildFallbackCoachResponse({
+  ...stageOneIntakeRequest,
+  intakeContext: {
+    round: 2,
+    history: [{
+      question: intakeFallbackRound1.data.clarification?.question ?? "目标用户是谁？",
+      answer: "经常网购服装、担心上身效果的年轻女性",
+      answerTarget: "targetUser",
+    }],
+  },
+}));
+assert.equal(intakeFallbackRound2.data.clarification?.round, 2);
+assert.equal(intakeFallbackRound2.data.projectDraft?.targetUser, "经常网购服装、担心上身效果的年轻女性");
+
+const stage23RouteRequest = aiCoachRequestSchema.parse({
+  mode: "route_options",
+  project: stageOneIntakeRequest.project,
+  evidence: stageOneIntakeRequest.evidence,
+  answer: "首次生成分析工作台与三条验证路线。",
+});
+const routeFallback = aiCoachResponseSchema.parse(buildFallbackCoachResponse(stage23RouteRequest));
+assert.equal(routeFallback.data.analysisWorkbench?.steps.length, 5);
+assert.equal(routeFallback.data.routeOptions?.length, 3);
+assert.equal(new Set(routeFallback.data.routeOptions?.map((route) => route.title)).size, 3);
+assert.equal(routeFallback.data.routeOptions?.some((route) => /成功概率|成功率|\d+%/.test(route.validationStatus)), false);
+assert.equal(routeFallback.data.routeOptions?.some((route) => /\d|%|万|亿/.test(`${route.market.tam}${route.market.sam}${route.market.growth}`)), false);
+const regeneratedRouteFallback = aiCoachResponseSchema.parse(buildFallbackCoachResponse({ ...stage23RouteRequest, answer: "再来3条：生成第 2 组路线，避开此前路线的主要行动。" }));
+assert.notDeepEqual(regeneratedRouteFallback.data.routeOptions?.map((route) => route.title), routeFallback.data.routeOptions?.map((route) => route.title));
+const customRouteFallback = aiCoachResponseSchema.parse(buildFallbackCoachResponse({ ...stage23RouteRequest, answer: "用户自定义方向：与社区药店合作做人工提醒服务" }));
+assert.match(customRouteFallback.data.routeOptions?.[2].title ?? "", /社区药店/);
+
+const solutionFallback = aiCoachResponseSchema.parse(buildFallbackCoachResponse(aiCoachRequestSchema.parse({
+  ...stage23RouteRequest,
+  mode: "solution_refinement",
+  stageContext: { step: "who", answers: { demographic: "年轻女性", psychographic: "", behavior: "", portrait: "" } },
+})));
+assert.equal(solutionFallback.data.solutionRefinement?.step, "who");
+assert.ok(solutionFallback.data.solutionRefinement?.gaps.length);
+assert.ok(solutionFallback.data.solutionRefinement?.draftFields.length);
+
+const researchFallback = aiCoachResponseSchema.parse(buildFallbackCoachResponse(aiCoachRequestSchema.parse({ ...stage23RouteRequest, mode: "research_analysis" })));
+assert.equal(researchFallback.data.researchReport?.items.length, 5);
+assert.equal(researchFallback.data.researchReport?.items.every((item) => item.sources.length === 0), true);
+assert.match(researchFallback.data.researchReport?.searchedAt ?? "", /未联网/);
+
+const redTeamFallback = aiCoachResponseSchema.parse(buildFallbackCoachResponse(aiCoachRequestSchema.parse({ ...stage23RouteRequest, mode: "red_team_analysis" })));
+assert.equal(redTeamFallback.data.redTeamRisks?.length, 3);
+assert.equal(redTeamFallback.data.redTeamRisks?.every((risk) => risk.mitigations.every((item) => Boolean(item.validationAction && item.credibilityBasis))), true);
+
+const roadmapFallback = aiCoachResponseSchema.parse(buildFallbackCoachResponse(aiCoachRequestSchema.parse({ ...stage23RouteRequest, mode: "task_decomposition" })));
+assert.ok((roadmapFallback.data.roadmapDraft?.milestones.length ?? 0) >= 3);
+assert.equal(roadmapFallback.data.roadmapDraft?.milestones.flatMap((milestone) => milestone.tasks).every((task) => Boolean(task.evidenceMethod && task.passCriteria && task.stopCriteria)), true);
+
+async function invokeAiHandler(fetchMock?: typeof fetch, requestBody = aiRequest) {
   const originalFetch = globalThis.fetch;
   if (fetchMock) globalThis.fetch = fetchMock;
   let statusCode = 200;
   let body: unknown;
   await aiCoachHandler(
-    { method: "POST", body: aiRequest },
+    { method: "POST", body: requestBody },
     {
       status(code: number) { statusCode = code; return this; },
       json(value: unknown) { body = value; },
@@ -229,6 +298,24 @@ assert.equal((await invokeAiHandler(async () => new Response(JSON.stringify({ ch
 assert.equal((await invokeAiHandler(async () => { throw new DOMException("aborted", "AbortError"); })).body.source, "fallback");
 const validAiData = { summary: "方案已具体。", questions: [], missingFields: [], suggestions: ["继续记录真实结果。"] };
 assert.equal((await invokeAiHandler(async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(validAiData) } }] }), { status: 200 }))).body.source, "ai");
+const validIntakeData = {
+  summary: "先确认第一批目标用户。",
+  questions: ["第一批最容易联系的人是谁？"],
+  missingFields: ["真实问题发生频率"],
+  suggestions: ["回答不会直接计入现实证据。"],
+  projectDraft: intakeFallbackRound1.data.projectDraft,
+  clarification: {
+    round: 1,
+    question: "第一批最容易联系的人是谁？",
+    hint: "缩小对象会改变后续验证渠道。",
+    options: ["网购服装的年轻女性", "服装店主"],
+    answerTarget: "targetUser",
+  },
+};
+assert.equal((await invokeAiHandler(
+  async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(validIntakeData) } }] }), { status: 200 }),
+  stageOneIntakeRequest,
+)).body.source, "ai");
 delete process.env.AI_ENABLED;
 delete process.env.AI_API_KEY;
 delete process.env.AI_MODEL;
@@ -394,7 +481,24 @@ assert.equal(buildFallbackCoachResponse(routeRequest).data.routeOptions?.length,
 const surveyRequest = aiCoachRequestSchema.parse({ ...aiRequest, mode: "survey_generation" });
 assert.ok((buildFallbackCoachResponse(surveyRequest).data.surveyDraft?.questions.length ?? 0) >= 3);
 const taskRequest = aiCoachRequestSchema.parse({ ...aiRequest, mode: "task_decomposition" });
-assert.equal(buildFallbackCoachResponse(taskRequest).data.taskDrafts?.length, 7);
+assert.ok((buildFallbackCoachResponse(taskRequest).data.roadmapDraft?.milestones.length ?? 0) >= 3);
+const evidenceReviewRequest = aiCoachRequestSchema.parse({
+  ...aiRequest,
+  mode: "evidence_review",
+  stageContext: {
+    record: {
+      behavior: "5位目标用户完成一键试衣，其中3位表示结果会影响购买判断",
+      quantity: 5,
+      frequency: "5人各体验1次",
+      userQuote: "如果效果接近真人，我会在下单前使用",
+      materialType: "screenshot：trial-results.png",
+      verifiable: true,
+    },
+  },
+});
+const evidenceReviewFallback = aiCoachResponseSchema.parse(buildFallbackCoachResponse(evidenceReviewRequest));
+assert.equal(evidenceReviewFallback.data.evidenceReview?.recommendation, "confirm");
+assert.equal(evidenceReviewFallback.data.evidenceReview?.extracted.quantity, 5);
 const cycleReviewRequest = aiCoachRequestSchema.parse({
   ...aiRequest,
   mode: "cycle_review",
@@ -408,10 +512,16 @@ const cycleReviewRequest = aiCoachRequestSchema.parse({
     ruleRecommendation: "hold",
     previousGoal: "验证目标用户是否真的存在痛点",
   },
+  stageContext: {
+    hypotheses: [{ hypothesis: "用户愿意试用", status: "supported", evidence: "5次真实试用" }],
+    failureReasons: ["尚未提出真实报价"],
+  },
 });
 const cycleReviewFallback = buildFallbackCoachResponse(cycleReviewRequest);
 assert.equal(cycleReviewFallback.data.cycleReview?.nextGoal.length ? true : false, true);
 assert.match(cycleReviewFallback.data.cycleReview?.summary ?? "", /第 2 轮/);
+assert.equal(cycleReviewFallback.data.cycleReview?.hypothesisChanges[0]?.status, "supported");
+assert.equal(cycleReviewFallback.data.cycleReview?.failureReasons[0], "尚未提出真实报价");
 
 const pendingEvidence = evidenceSummaryToRecords("pending-test", { ...emptyEvidence, interviewCount: 3 });
 pendingEvidence[0].reviewStatus = "pending";

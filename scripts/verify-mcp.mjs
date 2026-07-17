@@ -6,6 +6,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import mcpHandler from "../api/mcp.js";
 
+process.env.MCP_AI_ENABLED = "false";
+
 const expectedTools = [
   "opc_clarify_and_analyze",
   "opc_generate_routes",

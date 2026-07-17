@@ -15,6 +15,10 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { isCompetitionPresetIdea } from "../data/competitionPreset";
+import { requestAiCoach } from "../lib/aiClient";
+import { buildFallbackCoachResponse } from "../lib/aiFallback";
+import type { AiCoachData, AiCoachRequest } from "../lib/aiSchemas";
 import { recommendCycleOutcome } from "../lib/cycleEngine";
 import type { CalibrationRound, CycleOutcome, DecisionReport, EvidenceRecord, JourneyCycle, Project, ValidationTask } from "../types";
 
@@ -32,6 +36,7 @@ interface EvidenceRefillProps {
 }
 
 type ReviewSection = "result" | "assumptions" | "review" | "decision";
+type CycleAiReview = NonNullable<AiCoachData["cycleReview"]>;
 
 const reviewSections: Array<{ id: ReviewSection; label: string }> = [
   { id: "result", label: "本轮结果" },
@@ -60,9 +65,14 @@ export function EvidenceRefill({
   const recommendation = recommendCycleOutcome(report, activeCycle?.stageAtStart ?? project.currentStage);
   const [selectedOutcome, setSelectedOutcome] = useState<CycleOutcome>(recommendation);
   const [nextGoal, setNextGoal] = useState(() => buildNextGoal(project, confirmedRecords));
+  const [nextGoalEdited, setNextGoalEdited] = useState(false);
+  const [aiCycleReview, setAiCycleReview] = useState<CycleAiReview | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewMessage, setReviewMessage] = useState("");
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const hypothesisRows = useMemo(() => buildHypothesisRows(project, tasks, confirmedRecords), [confirmedRecords, project, tasks]);
-  const review = useMemo(() => buildAiReview(project, confirmedRecords, completedTasks, pendingRecords.length), [completedTasks, confirmedRecords, pendingRecords.length, project]);
+  const localReview = useMemo(() => buildAiReview(project, confirmedRecords, completedTasks, pendingRecords.length), [completedTasks, confirmedRecords, pendingRecords.length, project]);
+  const review = useMemo(() => mergeCycleReview(localReview, aiCycleReview), [aiCycleReview, localReview]);
   const newCycleNumber = (activeCycle?.cycleNumber ?? completedCycles.length + 1) + 1;
   const canAdvance = recommendation === "advance";
   const canReturn = (activeCycle?.stageAtStart ?? project.currentStage) !== "idea";
@@ -75,6 +85,28 @@ export function EvidenceRefill({
     if (outcome === "advance" && !canAdvance) return;
     if (outcome === "return" && !canReturn) return;
     setSelectedOutcome(outcome);
+  }
+
+  async function generateAiReview() {
+    if (reviewLoading) return;
+    setReviewLoading(true);
+    const request = buildCycleReviewRequest(project, report, activeCycle, tasks, confirmedRecords, hypothesisRows, recommendation);
+    const immediate = buildFallbackCoachResponse(request, "已先显示本地复盘，MiMo 正在后台尝试更新。");
+    if (immediate.data.cycleReview) {
+      setAiCycleReview(immediate.data.cycleReview);
+      if (!nextGoalEdited) setNextGoal(immediate.data.cycleReview.nextGoal);
+    }
+    setReviewMessage(immediate.notice ?? "");
+    const response = await requestAiCoach(request, {
+      strategy: isCompetitionPresetIdea(project, project.description) ? "preset-only" : "live-first",
+      cacheKey: `cycle-review:${project.id}:${activeCycle?.id ?? "current"}:${confirmedRecords.map((record) => record.id).join(",")}:${completedTasks.length}`,
+    });
+    if (response.data.cycleReview) {
+      setAiCycleReview(response.data.cycleReview);
+      if (!nextGoalEdited) setNextGoal(response.data.cycleReview.nextGoal);
+    }
+    setReviewMessage(response.notice || (response.source === "ai" ? "MiMo 已更新本轮复盘。" : "当前使用本地规则复盘。"));
+    setReviewLoading(false);
   }
 
   return (
@@ -121,13 +153,16 @@ export function EvidenceRefill({
       </section>
 
       <section id="growth-review" className="growthReviewSection aiRoundReview">
-        <header><div><span>AI阶段复盘</span><h2>只根据已确认的现实证据得出摘要。</h2><p>依据：{completedTasks.length} 项已通过任务、{confirmedRecords.length} 条已确认证据。</p></div><Sparkles size={27} /></header>
+        <header><div><span>AI阶段复盘</span><h2>只根据已确认的现实证据得出摘要。</h2><p>依据：{completedTasks.length} 项已通过任务、{confirmedRecords.length} 条已确认证据。</p></div><button className="aiReviewGenerateButton" type="button" disabled={reviewLoading} onClick={() => void generateAiReview()}><Sparkles size={16} />{reviewLoading ? "MiMo后台复盘中…" : "生成AI复盘"}</button></header>
+        {reviewMessage ? <p className="aiStageMessage">{reviewMessage}</p> : null}
         <div className="aiReviewGrid">
           <article><CheckCircle2 size={18} /><span>本轮得到</span><strong>{review.achievement}</strong></article>
           <article><TrendingUp size={18} /><span>下降的风险</span><strong>{review.loweredRisk}</strong></article>
           <article className="risk"><CircleAlert size={18} /><span>当前最高风险</span><strong>{review.highestRisk}</strong></article>
           <article className="goal"><Target size={18} /><span>下一轮唯一目标</span><strong>{nextGoal}</strong></article>
         </div>
+        {aiCycleReview?.hypothesisChanges.length ? <section className="aiHypothesisChanges"><strong>AI假设变化摘要</strong>{aiCycleReview.hypothesisChanges.map((item) => <article key={item.hypothesis}><span>{hypothesisStatusLabel(item.status)}</span><div><b>{item.hypothesis}</b><p>{item.evidence}</p></div></article>)}</section> : null}
+        {aiCycleReview?.failureReasons.length ? <aside className="aiFailureReasons"><strong>失败或未完成原因</strong><ul>{aiCycleReview.failureReasons.map((item) => <li key={item}>{item}</li>)}</ul></aside> : null}
         {confirmedRecords.length === 0 ? <aside className="noEvidenceWarning"><CircleAlert size={17} /><p>本轮没有已确认证据。即使完成了操作，也不能升级项目判断；下一轮仍应优先获得真实用户行为。</p></aside> : null}
       </section>
 
@@ -141,7 +176,7 @@ export function EvidenceRefill({
 
         <article className="nextCycleLaunchCard">
           <header><div><span>第 {newCycleNumber} 轮即将开始</span><h3>带着证据进入下一轮，而不是从头再来。</h3></div><Lightbulb size={25} /></header>
-          <label><span>下一轮唯一目标</span><textarea value={nextGoal} onChange={(event) => setNextGoal(event.target.value)} /></label>
+          <label><span>下一轮唯一目标</span><textarea value={nextGoal} onChange={(event) => { setNextGoalEdited(true); setNextGoal(event.target.value); }} /></label>
           <div className="nextCycleFacts"><p><span>建议周期</span><strong>7天</strong></p><p><span>投入上限</span><strong>{report.investmentLimit.days}天 / {report.investmentLimit.money}元</strong></p><p><span>将继承</span><strong>项目资料、历史证据、风险记录和任务结果</strong></p></div>
           <footer><p>选择“开启下一轮”后，本轮任务与证据会归档，不会被覆盖。</p><button className="primaryButton" type="button" disabled={!nextGoal.trim()} onClick={() => onStartNextCycle(selectedOutcome, review.summary, nextGoal)}>开启第 {newCycleNumber} 轮<ArrowRight size={16} /></button></footer>
         </article>
@@ -153,6 +188,67 @@ export function EvidenceRefill({
       </section>
     </div>
   );
+}
+
+function mergeCycleReview(local: ReturnType<typeof buildAiReview>, ai: CycleAiReview | null) {
+  if (!ai) return local;
+  return {
+    achievement: ai.achievements.join("；") || local.achievement,
+    loweredRisk: ai.riskChanges.join("；") || local.loweredRisk,
+    highestRisk: ai.highestRisk || local.highestRisk,
+    summary: ai.summary,
+  };
+}
+
+function buildCycleReviewRequest(
+  project: Project,
+  report: DecisionReport,
+  activeCycle: JourneyCycle | undefined,
+  tasks: ValidationTask[],
+  records: EvidenceRecord[],
+  hypotheses: Array<{ title: string; status: string; evidence: string }>,
+  recommendation: CycleOutcome,
+): AiCoachRequest {
+  const count = (types: EvidenceRecord["type"][]) => records.filter((record) => types.includes(record.type)).reduce((sum, record) => sum + record.quantity, 0);
+  const failureReasons = tasks.filter((task) => task.status === "failed" || task.workflowStatus === "blocked" || task.workflowStatus === "skipped").map((task) => task.difficulty || task.result || `${task.title}未完成`);
+  return {
+    mode: "cycle_review",
+    project: pickAiProject(project),
+    evidence: {
+      interviewCount: count(["interview"]),
+      activeInterestCount: count(["active_interest"]),
+      trialCount: count(["trial"]),
+      paymentCount: count(["payment", "quote"]),
+      hasRetention: records.some((record) => record.type === "repeat" || record.type === "referral" || /复用|持续使用|推荐/.test(`${record.behavior}${record.userQuote ?? ""}`)),
+    },
+    cycle: {
+      cycleNumber: activeCycle?.cycleNumber ?? 1,
+      completedTasks: tasks.filter((task) => task.workflowStatus === "completed").length,
+      failedTasks: failureReasons.length,
+      newEvidenceCount: records.length,
+      evidenceDelta: report.evidenceScore - (activeCycle?.evidenceScoreBefore ?? 0),
+      currentLight: report.light,
+      ruleRecommendation: recommendation,
+      previousGoal: activeCycle?.primaryGoal ?? project.biggestUncertainty,
+    },
+    stageContext: {
+      confirmedEvidence: records.map((record) => ({ type: record.type, behavior: record.behavior, quantity: record.quantity, userQuote: record.userQuote ?? "", material: record.attachmentName ?? "" })),
+      hypotheses: hypotheses.map((item) => ({
+        hypothesis: item.title,
+        status: /已支持|初步支持/.test(item.status) ? "supported" : item.status === "证据不足" ? "weakened" : "unverified",
+        evidence: item.evidence,
+      })),
+      failureReasons,
+    },
+  };
+}
+
+function pickAiProject(project: Project): AiCoachRequest["project"] {
+  return { name: project.name, description: project.description, targetUser: project.targetUser, painPoint: project.painPoint, alternative: project.alternative, acquisition: project.acquisition, monetization: project.monetization, currentStage: project.currentStage, existingArtifact: project.existingArtifact, biggestUncertainty: project.biggestUncertainty };
+}
+
+function hypothesisStatusLabel(status: CycleAiReview["hypothesisChanges"][number]["status"]) {
+  return { supported: "得到支持", weakened: "被削弱", unverified: "仍未验证" }[status];
 }
 
 function buildHypothesisRows(project: Project, tasks: ValidationTask[], records: EvidenceRecord[]) {

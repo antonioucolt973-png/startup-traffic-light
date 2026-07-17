@@ -3529,3 +3529,66 @@ body { color: var(--ink) !important; }
   .projectListAction { grid-column: 2; justify-self: start; }
 }
 
+.aiStageMessage {
+  margin: 10px 0 0;
+  color: #61727a;
+  font-size: 13px;
+}
+
+.researchSources {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.researchSources a {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #d7e4ea;
+  border-radius: 8px;
+  color: #146a92;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.researchSources small { color: #71828a; white-space: nowrap; }
+
+.riskAcceptanceReason {
+  display: grid;
+  gap: 7px;
+  margin: 16px 0;
+}
+
+.riskAcceptanceReason span { font-size: 13px; font-weight: 700; color: #53666e; }
+.riskAcceptanceReason input { padding: 11px 12px; border: 1px solid #d5e0e4; border-radius: 8px; }
+
+.structuredEvidenceReview { display: grid; gap: 12px; padding: 14px; border: 1px solid #cfe0ef; border-radius: 12px; background: #f7fbff; }
+.structuredEvidenceReview > header { display: flex; align-items: center; gap: 8px; color: #17679f; }
+.structuredEvidenceReview > header span { margin-left: auto; color: #71818b; font-size: 12px; }
+.structuredEvidenceReview dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.structuredEvidenceReview dl div { padding: 9px 10px; border-radius: 8px; background: #fff; }
+.structuredEvidenceReview dt { color: #71818b; font-size: 12px; }
+.structuredEvidenceReview dd { margin: 3px 0 0; color: #25372f; font-weight: 700; }
+.structuredEvidenceReview ul { margin: 7px 0 0 18px; }
+.structuredEvidenceReview aside { padding: 10px; border-radius: 8px; background: #fff7e9; color: #79551e; }
+.structuredEvidenceReview.quality-strong { border-color: #9dddbf; background: #f2fbf6; }
+.structuredEvidenceReview.quality-insufficient { border-color: #efc6bd; background: #fff7f4; }
+.aiReviewGenerateButton { display: inline-flex; align-items: center; gap: 7px; padding: 10px 14px; border: 1px solid #bdd7cb; border-radius: 9px; background: #fff; color: #176f4c; font-weight: 800; }
+.aiReviewGenerateButton:disabled { opacity: .6; }
+.aiHypothesisChanges { display: grid; gap: 8px; margin-top: 14px; }
+.aiHypothesisChanges > strong, .aiFailureReasons > strong { color: #27433a; }
+.aiHypothesisChanges article { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 11px 12px; border: 1px solid #dce7e1; border-radius: 9px; background: #fff; }
+.aiHypothesisChanges article > span { color: #1d70a3; font-weight: 800; }
+.aiHypothesisChanges b { color: #20342d; }
+.aiHypothesisChanges p { margin: 4px 0 0; color: #67766f; }
+.aiFailureReasons { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: #fff7e9; color: #76551f; }
+.aiFailureReasons ul { margin: 7px 0 0 18px; }
+
+@media (max-width: 760px) {
+  .structuredEvidenceReview dl { grid-template-columns: 1fr; }
+  .structuredEvidenceReview > header { align-items: flex-start; flex-wrap: wrap; }
+  .structuredEvidenceReview > header span { width: 100%; margin-left: 24px; }
+  .aiHypothesisChanges article { grid-template-columns: 1fr; }
+}

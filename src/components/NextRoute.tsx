@@ -118,24 +118,23 @@ export function NextRoute({
       note: pastedData.trim(),
       url: "",
       verifiable: sufficient,
-      reviewStatus: sufficient ? "confirmed" : "pending",
+      reviewStatus: "pending",
       origin: "task",
       rawRecordIds: [],
       attachmentType: submissionType,
       attachmentName: submissionType === "data" ? "已粘贴数据" : attachmentName,
       userQuote: userQuote.trim(),
       assessment: sufficient
-        ? "证据包含明确对象、实际行为、数量、用户原话和可复核材料，达到本任务的比赛预设审核要求。"
+        ? "本地规则预检通过，仍需在证据背包核对 AI 提取结果并由用户确认，之后才会计入证据充分度。"
         : `证据已收到，但仍需补充：${missing.join("、")}。`,
     };
-    const nextTask = { ...activeTask, status: sufficient ? "completed" as const : "pending" as const, workflowStatus: sufficient ? "completed" as const : "needs_evidence" as const, result: behavior.trim(), evidenceIds: [...activeTask.evidenceIds, record.id] };
-    const milestoneReached = sufficient && tasks.filter((task) => task.milestoneId === activeTask.milestoneId && task.id !== activeTask.id).every((task) => task.workflowStatus === "completed" || task.workflowStatus === "skipped");
-    onSubmitEvidence(nextTask, record, sufficient);
+    const nextTask = { ...activeTask, status: "pending" as const, workflowStatus: "needs_evidence" as const, result: behavior.trim(), evidenceIds: [...activeTask.evidenceIds, record.id] };
+    onSubmitEvidence(nextTask, record, false);
     setReviewResult({
       sufficient,
-      message: sufficient ? milestoneReached ? `你真棒！${activeTask.milestoneTitle || "当前里程碑"}达成！` : "你真棒！当前任务的证据已通过，下一项任务已经解锁。" : "证据收到，但似乎还需要更多数据支撑。",
+      message: sufficient ? "本地预检通过。请到证据背包核对 AI 提取结果并手动确认。" : "证据收到，但似乎还需要更多数据支撑。",
       missing,
-      milestoneReached,
+      milestoneReached: false,
       record,
     });
   }
@@ -195,8 +194,8 @@ export function NextRoute({
 
         {reviewResult ? <section className={`evidenceReviewResult ${reviewResult.sufficient ? "sufficient" : "insufficient"}`}>
           {reviewResult.sufficient ? <CheckCircle2 size={27} /> : <AlertTriangle size={27} />}
-          <div><span>{reviewResult.sufficient ? "证据充分" : "证据不足"}</span><h3>{reviewResult.message}</h3>{reviewResult.missing.length ? <ul>{reviewResult.missing.map((item) => <li key={item}>{item}</li>)}</ul> : <p>行动积分 +20，项目车继续前进，下一任务已解锁。只有这条已确认的现实证据会影响后续灯号。</p>}</div>
-          {!reviewResult.sufficient ? <div className="reviewResultActions"><button type="button" onClick={() => setReviewResult(null)}>补充证据</button><button type="button" onClick={() => { onUnlockNext(activeTask.id); setReviewResult(null); }}>先继续</button><button type="button" onClick={() => { setActionMode("difficulty"); setReviewResult(null); }}>求助</button></div> : <button type="button" onClick={() => { const next = nextAvailableTask(tasks, activeTask.id); if (next) chooseTask(next); }}>进入下一任务<ArrowRight size={15} /></button>}
+          <div><span>{reviewResult.sufficient ? "等待用户确认" : "证据不足"}</span><h3>{reviewResult.message}</h3>{reviewResult.missing.length ? <ul>{reviewResult.missing.map((item) => <li key={item}>{item}</li>)}</ul> : <p>AI 只负责提取和给出质量建议；确认前不会增加证据分、改变灯号或解锁下一任务。</p>}</div>
+          {!reviewResult.sufficient ? <div className="reviewResultActions"><button type="button" onClick={() => setReviewResult(null)}>补充证据</button><button type="button" onClick={() => { setActionMode("difficulty"); setReviewResult(null); }}>求助</button></div> : <button type="button" onClick={onOpenBackpack}>前往证据背包确认<ArrowRight size={15} /></button>}
         </section> : null}
 
         {actionMode ? <section className="taskActionComposer"><div><CircleHelp size={21} /><span><strong>{actionMode === "difficulty" ? "遇到困难" : actionMode === "delay" ? "延期执行" : "跳过这步"}</strong><small>{actionMode === "difficulty" ? "没关系，创业就是不断试错。我们来看看出了什么问题。" : "请留下原因，系统会保留这次决定。"}</small></span></div><textarea value={actionText} onChange={(event) => setActionText(event.target.value)} placeholder={actionMode === "difficulty" ? "例如：联系不到目标用户、用户拒绝上传照片、Demo效果不稳定。" : "填写延期或跳过原因。"} />{actionMode === "delay" ? <label><span>延期到</span><input type="date" value={delayDate} onChange={(event) => setDelayDate(event.target.value)} /></label> : null}<footer><button type="button" onClick={() => setActionMode(null)}>取消</button><button type="button" onClick={handleTaskAction}>确认记录</button></footer>{actionMode === "difficulty" ? <aside><Sparkles size={16} /><p><strong>比赛预设替代方案</strong>把目标从5人缩小到3人，先从已有朋友开始；如果仍无法完成，返回上一任务检查目标用户是否过宽。</p></aside> : null}</section> : null}
@@ -253,9 +252,4 @@ function workflowLabel(task: ValidationTask) {
     completed: "证据已通过",
   };
   return labels[task.workflowStatus ?? "ready"];
-}
-
-function nextAvailableTask(tasks: ValidationTask[], taskId: string) {
-  const index = tasks.findIndex((task) => task.id === taskId);
-  return tasks[index + 1];
 }
